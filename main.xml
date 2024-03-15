@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<workspace>
+    <repositories>
+        <repository 
+        path ="Uri"
+        url="git@bitbucket.org:digitalstrling/uri.git"
+        branch="master"/>
+        <repository
+            path = "googletest"
+            uri="https://github.com/googletest.git"
+            branch="master"/>
+    </repositories>
+</workspace>

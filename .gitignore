@@ -1,3 +1,10 @@
+/Uri/
+
+/.vscode/
+
+/build*/
+/target/
+
 # Prerequisites
 *.d
 
