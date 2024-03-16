@@ -3,7 +3,7 @@
     <repositories>
         <repository 
         path ="Uri"
-        url="git@bitbucket.org:digitalstrling/uri.git"
+        url="https://github.com/HANABLI/Uri.git"
         branch="master"/>
         <repository
             path = "googletest"
