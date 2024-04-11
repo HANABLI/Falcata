@@ -63,6 +63,7 @@ if(ParentDirectory STREQUAL "")
 
     # All other libraties can be pulled in whiout further configuration.
     add_subdirectory(Uri)
+    add_subdirectory(Utf8)
     add_subdirectory(MessageHeaders)
 endif(ParentDirectory STREQUAL "")
 
