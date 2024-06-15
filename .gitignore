@@ -1,7 +1,11 @@
 /Uri/
 /Utf8/
+/Http/
 /MessageHeaders/
 /googletest/
+/StringUtils/
+/SystemUtils/
+/WebServer/
 
 /.vscode/
 

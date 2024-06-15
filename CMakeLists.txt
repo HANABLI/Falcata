@@ -43,14 +43,29 @@ if(ParentDirectory STREQUAL "")
     
     
     # Keep Google Test's linkage of the runtime in sync with our own.
-    if (RUNTIME_STATIC_LINKAGE)
-        set(gtest_force_shared_crt OFF CACHE BOOL "Use shared (DLL) run-time lib even when Google Test is built as static lib." FORCE)
-    else(RUNTIME_STATIC_LINKAGE)
-        set(gtest_force_shared_crt ON CACHE BOOL "Use shared (DLL) run-time lib even when Google Test is built as static lib." FORCE)
-    endif(RUNTIME_STATIC_LINKAGE)
-
+    if(MSVC)
+        if (RUNTIME_STATIC_LINKAGE)
+            set(gtest_force_shared_crt OFF CACHE BOOL "Use shared (DLL) run-time lib even when Google Test is built as static lib." FORCE)
+        else(RUNTIME_STATIC_LINKAGE)
+            set(gtest_force_shared_crt ON CACHE BOOL "Use shared (DLL) run-time lib even when Google Test is built as static lib." FORCE)
+        endif(RUNTIME_STATIC_LINKAGE)
+    endif(MSVC)
     # Organize applications, libraries, etc. in folders in the IDE
     set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+    # Ensure proper loading of side-loaded shared libraries
+    # on all targets.
+    set(CMAKE_SKIP_BUILD_RPATH FALSE)
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+    if(APPLE)
+        set(CMAKE_INSTALL_RPATH "@loader_path")
+    elseif(UNIX)
+        set(CMAKE_INSTALL_RPATH "\$ORIGIN")
+    endif()
+
+
+    # Don't add the goofy "d" postfix for debug builds of libraries.
+    set(CMAKE_DEBUG_POSTFIX "")
 
     # Suppress Microsoft warnings about functions being unsafe.
     add_definitions(-D_CRT_SECURE_NO_WARNINGS -D_SCL_SECURE_NO_WARNINGS)
@@ -63,8 +78,12 @@ if(ParentDirectory STREQUAL "")
 
     # All other libraties can be pulled in whiout further configuration.
     add_subdirectory(Uri)
+    add_subdirectory(Http)
     add_subdirectory(Utf8)
+    add_subdirectory(WebServer)
     add_subdirectory(MessageHeaders)
+    add_subdirectory(StringUtils)
+    add_subdirectory(SystemUtils)
 endif(ParentDirectory STREQUAL "")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
