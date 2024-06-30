@@ -1,2 +1,0 @@
-# HTTPNetworkTransport
-This is a library which implements the transport interfaces needed by the Http library, in terms of the network endpoint and connection abstractions provided by the SystemAbstractions library.
