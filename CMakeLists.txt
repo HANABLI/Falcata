@@ -84,6 +84,7 @@ if(ParentDirectory STREQUAL "")
     add_subdirectory(MessageHeaders)
     add_subdirectory(StringUtils)
     add_subdirectory(SystemUtils)
+    add_subdirectory(HttpServerTransport)
 endif(ParentDirectory STREQUAL "")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
