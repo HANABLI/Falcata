@@ -1,11 +1,13 @@
 /Uri/
 /Utf8/
 /Http/
+/Json/
 /MessageHeaders/
 /googletest/
 /StringUtils/
 /SystemUtils/
 /WebServer/
+/HttpNetworkTransport/
 
 /.vscode/
 

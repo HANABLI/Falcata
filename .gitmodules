@@ -22,3 +22,9 @@
 [submodule "WebServer"]
 	path = WebServer
 	url = https://github.com/HANABLI/WebServer.git
+[submodule "HttpNetworkTransport"]
+	path = HttpNetworkTransport
+	url = https://github.com/HANABLI/HttpNetworkTransport.git
+[submodule "Json"]
+	path = Json
+	url = https://github.com/HANABLI/Json.git
