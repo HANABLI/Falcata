@@ -1,3 +1,15 @@
 {
-    "port": 8080
+    "port": 8080,
+    "plugins-image": "C:/Users/ADMIN/Documents/3_Dev/Falcata/WebServer/Debug/plugins",
+    "plugins-runtime": "C:/Users/ADMIN/Documents/3_Dev/Falcata/WebServer/Debug/plugins/runtime",
+    "plugins-enabled": ["StaticContentPlugin"],
+    "plugins": {
+        "StaticContentPlugin": {
+            "module": "StaticContentPlugin",
+            "configuration": {
+                "space": "/",
+                "root": "C:/Users/ADMIN/Documents/3_Dev/Falcata/TestStaticContent"
+            }
+        }
+    }
 }
