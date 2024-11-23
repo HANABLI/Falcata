@@ -28,3 +28,6 @@
 [submodule "Json"]
 	path = Json
 	url = https://github.com/HANABLI/Json.git
+[submodule "WebSocket"]
+	path = WebSocket
+	url = https://github.com/HANABLI/WebSocket.git

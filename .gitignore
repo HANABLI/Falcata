@@ -8,6 +8,7 @@
 /SystemUtils/
 /WebServer/
 /HttpNetworkTransport/
+/WebSocket/
 
 /.vscode/
 
