@@ -2,6 +2,8 @@
 /Utf8/
 /Http/
 /Json/
+/Sha1/
+/Base64/
 /MessageHeaders/
 /googletest/
 /StringUtils/

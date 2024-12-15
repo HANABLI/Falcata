@@ -87,6 +87,8 @@ if(ParentDirectory STREQUAL "")
     add_subdirectory(SystemUtils)
     add_subdirectory(HttpNetworkTransport)
     add_subdirectory(WebSocket)
+    add_subdirectory(Sha1)
+    add_subdirectory(Base64)
 endif(ParentDirectory STREQUAL "")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

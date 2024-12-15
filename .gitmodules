@@ -31,3 +31,9 @@
 [submodule "WebSocket"]
 	path = WebSocket
 	url = https://github.com/HANABLI/WebSocket.git
+[submodule "Sha1"]
+	path = Sha1
+	url = https://github.com/HANABLI/Sha1.git
+[submodule "Base64"]
+	path = Base64
+	url = https://github.com/HANABLI/Base64.git
