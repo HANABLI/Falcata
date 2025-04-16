@@ -88,6 +88,7 @@ if(ParentDirectory STREQUAL "")
     # All other libraties can be pulled in whiout further configuration.
     add_subdirectory(Uri)
     add_subdirectory(Http)
+    add_subdirectory(Mqtt)
     add_subdirectory(Utf8)
     add_subdirectory(Json)
     add_subdirectory(WebServer)

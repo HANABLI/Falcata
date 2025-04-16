@@ -19,6 +19,9 @@
 [submodule "Http"]
 	path = Http
 	url = https://github.com/HANABLI/Http.git
+[submodule "Mqtt"]
+	path = Mqtt
+	url = https://github.com/HANABLI/Mqtt.git
 [submodule "WebServer"]
 	path = WebServer
 	url = https://github.com/HANABLI/WebServer.git
