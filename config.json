@@ -1,14 +1,33 @@
 {
-    "port": 8080,
+    "server": {
+        "Port": "8080",
+        "InactivityTimeout": "1.0",
+        "RequestTimeout": "60.0",
+        "IdleTimeout": "60.0",
+        "HeaderLineLimit": "1000000"
+    },
     "plugins-image": "C:/Users/ADMIN/Documents/3_Dev/Falcata/build/WebServer/Debug/plugins",
     "plugins-runtime": "C:/Users/ADMIN/Documents/3_Dev/Falcata/build/WebServer/Debug/plugins/runtime",
-    "plugins-enabled": ["StaticContentPlugin"],
+    "plugins-enabled": ["StaticContentPlugin", "ChatRoomPlugin"],
     "plugins": {
         "StaticContentPlugin": {
             "module": "StaticContentPlugin",
             "configuration": {
-                "space": "/",
-                "root": "C:/Users/ADMIN/Documents/3_Dev/Falcata/TestStaticContent"
+                "space": "/static",
+                "root": "C:/Users/ADMIN/Documents/3_Dev/Falcata/TestStaticContent",
+                "filtre": {
+                    "bar": ["*.html", "*.css"]
+                }
+            }
+        },
+        "ChatRoomPlugin": {
+            "module": "ChatRoomPlugin",
+            "configuration": {
+                "space": "/chat",
+                "root": "C:/Users/ADMIN/Documents/3_Dev/Falcata/TestStaticContent",
+                "filtre": {
+                    "bar": ["*.html", "*.css"]
+                }
             }
         }
     }
