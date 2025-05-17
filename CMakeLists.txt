@@ -82,23 +82,84 @@ if(ParentDirectory STREQUAL "")
     # Google Test
     set(BUILD_GTEST ON CACHE BOOL "Builds the googletest subproject" FORCE)
     set(BUILD_GMOCK OFF CACHE BOOL "Builds the googlemock subproject" FORCE)
-    add_subdirectory(googletest)
+    ## add_subdirectory(googletest)
+    # Add GoogleTest dependency
+    include(FetchContent)
+    FetchContent_Declare(
+      googletest
+      URL https://github.com/google/googletest/archive/refs/tags/release-1.13.0.zip
+    )
+    FetchContent_MakeAvailable(googletest)
     set_target_properties(gtest gtest_main PROPERTIES FOLDER Libraries)
 
     # All other libraties can be pulled in whiout further configuration.
-    add_subdirectory(Uri)
-    add_subdirectory(Http)
-    add_subdirectory(MqttV5)
-    add_subdirectory(Utf8)
-    add_subdirectory(Json)
-    add_subdirectory(WebServer)
-    add_subdirectory(MessageHeaders)
-    add_subdirectory(StringUtils)
-    add_subdirectory(SystemUtils)
-    add_subdirectory(HttpNetworkTransport)
-    add_subdirectory(WebSocket)
-    add_subdirectory(Sha1)
-    add_subdirectory(Base64)
+    FetchContent_Declare(
+      Uri
+      GIT_REPOSITORY https://github.com/HANABLI/Uri.git
+      GIT_TAG master
+    )
+    FetchContent_MakeAvailable(Uri)
+    FetchContent_Declare(
+      Http
+      GIT_REPOSITORY https://github.com/HANABLI/Http.git
+      GIT_TAG master
+    )
+    FetchContent_MakeAvailable(Http)
+    FetchContent_Declare(
+      MqttV5
+      GIT_REPOSITORY https://github.com/HANABLI/MqttV5.git
+      GIT_TAG master
+    )
+    FetchContent_MakeAvailable(MqttV5)
+    FetchContent_Declare(
+      Utf8
+      GIT_REPOSITORY https://github.com/HANABLI/Utf8.git
+      GIT_TAG master
+    )
+    FetchContent_MakeAvailable(Utf8)
+    FetchContent_Declare(
+      Json
+      GIT_REPOSITORY https://github.com/HANABLI/Json.git
+      GIT_TAG master
+    )
+    FetchContent_MakeAvailable(Json)
+    FetchContent_Declare(
+      Json
+      GIT_REPOSITORY https://github.com/HANABLI/Json.git
+      GIT_TAG master
+    )
+    FetchContent_MakeAvailable(Json)
+    FetchContent_Declare(
+      SystemUtils
+      GIT_REPOSITORY https://github.com/HANABLI/SystemUtils.git
+      GIT_TAG master
+    )
+    FetchContent_MakeAvailable(SystemUtils)
+    FetchContent_Declare(
+      StringUtils
+      GIT_REPOSITORY https://github.com/HANABLI/StringUtils.git
+      GIT_TAG master
+    )
+    FetchContent_MakeAvailable(StringUtils)
+    FetchContent_Declare(
+      HttpNetworkTransport
+      GIT_REPOSITORY https://github.com/HANABLI/HttpNetworkTransport.git
+      GIT_TAG master
+    )
+    FetchContent_MakeAvailable(HttpNetworkTransport)
+    ##add_subdirectory(Uri)
+    ##add_subdirectory(Http)
+    ##add_subdirectory(MqttV5)
+    ##add_subdirectory(Utf8)
+    ##add_subdirectory(Json)
+    ##add_subdirectory(WebServer)
+    ##add_subdirectory(MessageHeaders)
+    ##add_subdirectory(StringUtils)
+    ##add_subdirectory(SystemUtils)
+    ##add_subdirectory(HttpNetworkTransport)
+    ##add_subdirectory(WebSocket)
+    ##add_subdirectory(Sha1)
+    ##add_subdirectory(Base64)
 endif(ParentDirectory STREQUAL "")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
