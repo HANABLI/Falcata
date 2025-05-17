@@ -8,8 +8,8 @@ project(${this} C CXX)
 
 # append cmake modules
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 #
@@ -88,7 +88,7 @@ if(ParentDirectory STREQUAL "")
     # All other libraties can be pulled in whiout further configuration.
     add_subdirectory(Uri)
     add_subdirectory(Http)
-    add_subdirectory(Mqtt)
+    add_subdirectory(MqttV5)
     add_subdirectory(Utf8)
     add_subdirectory(Json)
     add_subdirectory(WebServer)

@@ -20,8 +20,8 @@
 	path = Http
 	url = https://github.com/HANABLI/Http.git
 [submodule "Mqtt"]
-	path = Mqtt
-	url = https://github.com/HANABLI/Mqtt.git
+	path = MqttV5
+	url = https://github.com/HANABLI/MqttV5.git
 [submodule "WebServer"]
 	path = WebServer
 	url = https://github.com/HANABLI/WebServer.git
@@ -40,3 +40,6 @@
 [submodule "Base64"]
 	path = Base64
 	url = https://github.com/HANABLI/Base64.git
+[submodule "chatroom"]
+	path = chatroom
+	url = https://github.com/HANABLI/chatroom.git

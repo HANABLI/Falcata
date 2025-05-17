@@ -2,6 +2,7 @@
 /Utf8/
 /Http/
 /Mqtt/
+/MqttV5/
 /Json/
 /Sha1/
 /Base64/
@@ -12,6 +13,7 @@
 /WebServer/
 /HttpNetworkTransport/
 /WebSocket/
+/chatroom/
 
 /.vscode/
 /.clang-format/
