@@ -22,6 +22,9 @@
 [submodule "Mqtt"]
 	path = MqttV5
 	url = https://github.com/HANABLI/MqttV5.git
+[submodule "MqttNetworkTransport"]
+	path = MqttNetworkTransport
+	url = https://github.com/HANABLI/MqttNetworkTransport.git
 [submodule "WebServer"]
 	path = WebServer
 	url = https://github.com/HANABLI/WebServer.git

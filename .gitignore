@@ -3,6 +3,7 @@
 /Http/
 /Mqtt/
 /MqttV5/
+/MqttNetworkTransport/
 /Json/
 /Sha1/
 /Base64/
