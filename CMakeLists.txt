@@ -8,12 +8,12 @@ project(${this} C CXX)
 
 # append cmake modules
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 #
-if(CMAKE_BUILD_TYPE STREQUAL "debug")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_CXX_CLANG_TIDY "clang-tidy;-checks=google-*,-clang-analyzer-*")
 endif()
 
@@ -100,6 +100,10 @@ if(ParentDirectory STREQUAL "")
     add_subdirectory(WebSocket)
     add_subdirectory(Sha1)
     add_subdirectory(Base64)
+    add_subdirectory(UuidV7)
+    add_subdirectory(TimeTracking)
+    add_subdirectory(PgClient)
+    add_subdirectory(Base32)
 endif(ParentDirectory STREQUAL "")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
