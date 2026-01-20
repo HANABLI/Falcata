@@ -25,6 +25,9 @@
 [submodule "MqttNetworkTransport"]
 	path = MqttNetworkTransport
 	url = https://github.com/HANABLI/MqttNetworkTransport.git
+[submodule "TimeTracking"]
+	path = TimeTracking
+	url = https://github.com/HANABLI/TimeTracking.git
 [submodule "WebServer"]
 	path = WebServer
 	url = https://github.com/HANABLI/WebServer.git
@@ -46,3 +49,12 @@
 [submodule "chatroom"]
 	path = chatroom
 	url = https://github.com/HANABLI/chatroom.git
+[submodule "FalcataWebApp"]
+	path = FalcataWebApp
+	url= https://github.com/HANABLI/FalcataWebApp.git
+[submodule "PgClient"]
+	path = PgClient
+	url= https://github.com/HANABLI/PgClient.git
+[submodule "Base32"]
+	path = Base32
+	url= https://github.com/HANABLI/Base32.git
