@@ -1,0 +1,31 @@
+version: "3.9"
+
+services:
+    falcata:
+        image: ghcr.io/your-org/your-repo:latest
+        restart: unless-stopped
+        ports:
+            - "8080:8080"
+        environment:
+            JWT_SECRET: "${JWT_SECRET}"
+            PG_CONNINFO: "${PG_CONNINFO:-dbname=iot user=postgres password=admin host=postgres port=5432}"
+            PLUGINS_DIR: "/opt/falcata/plugins"
+            PLUGINS_RUNTIME_DIR: "/opt/falcata/plugins/runtime"
+        volumes:
+            - ./plugins:/opt/falcata/plugins
+
+    postgres:
+        image: postgres:16
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: iot
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: admin
+        ports:
+            - "5432:5432"
+        volumes:
+            - pgdata:/var/lib/postgresql/data
+            - ./WebServer/sql/iot.sql: /docker-entrypoint-initdb.d/01_iot.sql
+
+volumes:
+    pgdata:
