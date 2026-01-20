@@ -4,9 +4,13 @@
 /Mqtt/
 /MqttV5/
 /MqttNetworkTransport/
+/TimeTracking/
+/WireShark/
 /Json/
 /Sha1/
 /Base64/
+/Base32/
+/UuidV7/
 /MessageHeaders/
 /googletest/
 /StringUtils/
@@ -15,6 +19,8 @@
 /HttpNetworkTransport/
 /WebSocket/
 /chatroom/
+/PgClient/
+/FalcataWebApp/
 
 /.vscode/
 /.clang-format/
@@ -58,3 +64,7 @@
 
 #
 *.clang-format
+.
+
+# Env variables
+.env
