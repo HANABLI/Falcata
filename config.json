@@ -8,7 +8,12 @@
     },
     "plugins-image": "C:/Users/ADMIN/Documents/3_Dev/Falcata/build/WebServer/Debug/plugins",
     "plugins-runtime": "C:/Users/ADMIN/Documents/3_Dev/Falcata/build/WebServer/Debug/plugins/runtime",
-    "plugins-enabled": ["StaticContentPlugin", "ChatRoomPlugin"],
+    "plugins-enabled": [
+        "AuthSigninPlugin",
+        "StaticContentPlugin",
+        "ChatRoomPlugin",
+        "mqttClientPlugin"
+    ],
     "plugins": {
         "StaticContentPlugin": {
             "module": "StaticContentPlugin",
@@ -28,6 +33,45 @@
                 "filtre": {
                     "bar": ["*.html", "*.css"]
                 }
+            }
+        },
+        "mqttClientPlugin": {
+            "module": "mqttClientPlugin",
+            "configuration": {
+                "space": "/mqtt",
+                "root": "C:/Users/ADMIN/Documents/3_Dev/Falcata/TestStaticContent",
+                "filtre": {
+                    "bar": ["*.html", "*.css"]
+                },
+                "Port": 1883,
+                "Host": "hatem",
+                "Protocol": "mqtt://",
+                "UserName": "",
+                "Password": "",
+                "Client-Id": "eed87e2c-fff2-4907-b505-0c0c8aae99701764711865515",
+                "Clean-Session": true,
+                "Reconnect-Period": 1,
+                "Connect-Timeout": 300,
+                "KeepAlive": 300,
+                "QoS": 1,
+                "Will-Topic": "",
+                "Will-Retain": true,
+                "Will-Payload": ""
+            }
+        },
+        "AuthSigninPlugin": {
+            "module": "AuthSigninPlugin",
+            "configuration": {
+                "spaces": [
+                    { "space": "/auth/signin" },
+                    { "space": "/auth/login" },
+                    { "space": "/auth/users" }
+                ],
+                "PgConninfo": "dbname=iot user=postgres password=admin host=localhost port=5433",
+                "JwtSecret": "CHANGE_ME_SUPER_SECRET",
+                "JwtTtlSec": 3600,
+                "JwtIss": "falcata-iot",
+                "JwtAud": "falcata-web"
             }
         }
     }
