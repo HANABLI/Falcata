@@ -1,0 +1,198 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build & Test (${{ matrix.os }}, ${{ matrix.compiler }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2022]
+        compiler: [gcc, clang, msvc]
+        exclude:
+          - os: ubuntu-22.04
+            compiler: msvc
+          - os: windows-2022
+            compiler: gcc
+          - os: windows-2022
+            compiler: clang
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Install deps (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential cmake ninja-build clang clang-tidy clang-format ccache
+
+      - name: Setup MSVC Developer Command Prompt
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install LLVM (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install llvm -y --no-progress
+          $llvmBin = "C:\\Program Files\\LLVM\\bin"
+          echo "LLVM bin: $llvmBin" 
+          echo $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Cache ccache (Ubuntu)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ccache
+          key: ccache-${{ runner.os }}-${{ matrix.compiler }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ matrix.compiler }}-
+
+      - name: Configure (Ubuntu)
+        if: runner.os == 'Linux'
+        env:
+          CC: ${{ matrix.compiler == 'clang' && 'clang' || 'gcc' }}
+          CXX: ${{ matrix.compiler == 'clang' && 'clang++' || 'g++' }}
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Configure (Windows / MSVC)
+        if: runner.os == 'Windows'
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: |
+          cd build
+          ctest --output-on-failure
+
+      - name: Clang-Format check (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          clang-format --version
+          clang-format --dry-run --Werror $(git ls-files '*.cpp' '*.hpp' '*.h' '*.c')
+
+      - name: Clang-Format check (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          clang-format --version
+          $files = git ls-files | Where-Object { $_ -match '\\.(c|h|cpp|hpp)$' }
+          if (-not $files) { Write-Host "No source files found."; exit 0 }
+          clang-format --dry-run --Werror $files
+
+      - name: Clang-Tidy (Ubuntu, best-effort)
+        if: runner.os == 'Linux'
+        run: |
+          clang-tidy --version
+          # Use compile_commands.json produced by CMake
+          clang-tidy $(git ls-files '*.cpp') -p build || true
+
+      - name: Clang-Tidy (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          clang-tidy --version
+          $cpp = git ls-files | Where-Object { $_ -match '\\.(cpp|cc|cxx)$' }
+          if (-not $cpp) { Write-Host "No C++ sources found."; exit 0 }
+          clang-tidy $cpp -p build
+
+  sanitizers:
+    name: Sanitizers (ASan/UBSan)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install deps
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential cmake ninja-build clang
+
+      - name: Configure
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          cmake -S . -B build-asan -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' \
+            -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' \
+            -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined'
+
+      - name: Build
+        run: cmake --build build-asan --parallel
+
+      - name: Test
+        run: |
+          cd build-asan
+          ctest --output-on-failure
+
+  sanitizers-windows:
+    name: Sanitizers (Windows ASan)
+    runs-on: windows-2022
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Setup MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install LLVM (Windows)
+        shell: pwsh
+        run: |
+          choco install llvm -y --no-progress
+          $llvmBin = "C:\\Program Files\\LLVM\\bin"
+          echo $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Configure (clang-cl + ASan)
+        shell: pwsh
+        run: |
+          cmake -S . -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug `
+            -DCMAKE_C_COMPILER=clang-cl `
+            -DCMAKE_CXX_COMPILER=clang-cl `
+            -DCMAKE_C_FLAGS="/fsanitize=address /Zi /Od" `
+            -DCMAKE_CXX_FLAGS="/fsanitize=address /Zi /Od" `
+            -DCMAKE_EXE_LINKER_FLAGS="/fsanitize=address"
+
+      - name: Build
+        run: cmake --build build-asan --parallel
+
+      - name: Test
+        shell: pwsh
+        run: |
+          # Ensure ASan runtime DLL can be found
+          $llvmBin = "C:\\Program Files\\LLVM\\bin"
+          $env:PATH = "$llvmBin;$env:PATH"
+          cd build-asan
+          ctest --output-on-failure
+
