@@ -58,3 +58,6 @@
 [submodule "Base32"]
 	path = Base32
 	url= https://github.com/HANABLI/Base32.git
+[submodule "UuidV7"]
+	path = UuidV7
+	url= https://github.com/HANABLI/UuidV7.git
