@@ -39,7 +39,7 @@ jobs:
               if: runner.os == 'Linux'
               run: |
                   sudo apt update
-                  sudo apt install -y build-essential cmake ninja-build clang clang-tidy clang-format ccache libsodium-dev
+                  sudo apt install -y build-essential cmake ninja-build clang clang-tidy clang-format ccache libsodium-dev libpq-dev
 
             - name: Setup MSVC Developer Command Prompt
               if: runner.os == 'Windows'
@@ -82,7 +82,7 @@ jobs:
                   .\vcpkg.exe version
 
                   # Install the dependency your Auth module needs
-                  .\vcpkg.exe install libsodium:x64-windows
+                  .\vcpkg.exe install libsodium:x64-windows libpq:x64-windows
                   Pop-Location
 
             - name: Cache ccache (Ubuntu)
