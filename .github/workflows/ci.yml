@@ -1,9 +1,15 @@
 name: CI
 
 on:
+<<<<<<< HEAD
     push:
         branches: [master]
     pull_request:
+=======
+  push:
+    branches: [ master ]
+  pull_request:
+>>>>>>> a8808c368980df791284cee7e3a19e5cf1d9542e
 
 concurrency:
     group: ci-${{ github.ref }}
