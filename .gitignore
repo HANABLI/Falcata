@@ -1,26 +1,3 @@
-/Uri/
-/Utf8/
-/Http/
-/Mqtt/
-/MqttV5/
-/MqttNetworkTransport/
-/TimeTracking/
-/WireShark/
-/Json/
-/Sha1/
-/Base64/
-/Base32/
-/UuidV7/
-/MessageHeaders/
-/googletest/
-/StringUtils/
-/SystemUtils/
-/WebServer/
-/HttpNetworkTransport/
-/WebSocket/
-/chatroom/
-/PgClient/
-/FalcataWebApp/
 
 /.vscode/
 /.clang-format/
