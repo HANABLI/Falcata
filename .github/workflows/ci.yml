@@ -39,7 +39,7 @@ jobs:
               if: runner.os == 'Linux'
               run: |
                   sudo apt update
-                  sudo apt install -y build-essential cmake ninja-build clang clang-tidy clang-format ccache
+                  sudo apt install -y build-essential cmake ninja-build clang clang-tidy clang-format ccache libsodium-dev
 
             - name: Setup MSVC Developer Command Prompt
               if: runner.os == 'Windows'
@@ -53,6 +53,37 @@ jobs:
                   $llvmBin = "C:\\Program Files\\LLVM\\bin"
                   echo "LLVM bin: $llvmBin"
                   echo $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+            # --- libsodium via vcpkg at the EXACT path our CMake hard-codes ---
+            - name: Cache vcpkg (Windows)
+              if: runner.os == 'Windows'
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      C:\Users\ADMIN\Documents\3_Dev\vcpkg
+                  key: vcpkg-${{ runner.os }}-${{ hashFiles('.gitmodules') }}
+                  restore-keys: |
+                      vcpkg-${{ runner.os }}-
+
+            - name: Install libsodium with vcpkg (Windows)
+              if: runner.os == 'Windows'
+              shell: pwsh
+              run: |
+                  $vcpkgRoot = "C:\Users\ADMIN\Documents\3_Dev\vcpkg"
+                  New-Item -ItemType Directory -Force -Path $vcpkgRoot | Out-Null
+
+                  if (-not (Test-Path "$vcpkgRoot\.git")) {
+                    git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
+                  }
+
+                  Push-Location $vcpkgRoot
+                  git pull
+                  .\bootstrap-vcpkg.bat
+                  .\vcpkg.exe version
+
+                  # Install the dependency your Auth module needs
+                  .\vcpkg.exe install libsodium:x64-windows
+                  Pop-Location
 
             - name: Cache ccache (Ubuntu)
               if: runner.os == 'Linux'
