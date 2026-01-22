@@ -108,8 +108,11 @@ jobs:
 
             - name: Configure (Windows / MSVC)
               if: runner.os == 'Windows'
+              shell: pwsh
               run: |
-                  cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+                  $tc = "C:\Users\ADMIN\Documents\3_Dev\vcpkg\scripts\buildsystems\vcpkg.cmake"
+                  cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug `
+                    -DCMAKE_TOOLCHAIN_FILE="$tc"
 
             - name: Build
               run: cmake --build build --parallel
