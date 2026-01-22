@@ -83,7 +83,7 @@ if(ParentDirectory STREQUAL "")
     set(BUILD_GTEST ON CACHE BOOL "Builds the googletest subproject" FORCE)
     set(BUILD_GMOCK OFF CACHE BOOL "Builds the googlemock subproject" FORCE)
     add_subdirectory(googletest)
-    set_target_properties(gtest gtest_main PROPERTIES FOLDER Libraries)
+    set_target_properties(gtest gtest_main PROPERTIES FOLDER Libraries CXX_CLANG_TIDY "")
 
     # All other libraties can be pulled in whiout further configuration.
     add_subdirectory(Uri)
