@@ -217,7 +217,8 @@ jobs:
                     -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
                     -DCMAKE_C_FLAGS="/fsanitize=address /Zi /Od" `
                     -DCMAKE_CXX_FLAGS="/fsanitize=address /Zi /Od" `
-                    -DCMAKE_EXE_LINKER_FLAGS="/fsanitize=address /INCREMENTAL:NO"
+                    -DCMAKE_SHARED_LINKER_FLAGS="/INCREMENTAL:NO" `
+                    -DCMAKE_EXE_LINKER_FLAGS="/INCREMENTAL:NO"
 
             - name: Build
               run: cmake --build build-asan --parallel
