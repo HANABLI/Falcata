@@ -118,17 +118,18 @@ jobs:
         name: Deploy (docker compose pull + up)
         runs-on: ubuntu-22.04
         needs: docker-build-push
-        if: ${{ secrets.DEPLOY_HOST != '' }}
+        environment: secrets
+        if: ${{ vars.DEPLOY_HOST != '' }}
 
         steps:
             - name: Deploy via SSH
               uses: appleboy/ssh-action@v1.0.3
               with:
-                  host: ${{ secrets.DEPLOY_HOST }}
+                  host: ${{ vars.DEPLOY_HOST }}
                   username: ${{ secrets.DEPLOY_USER }}
                   key: ${{ secrets.DEPLOY_SSH_KEY }}
                   script: |
                       set -e
-                      cd ${{ secrets.DEPLOY_PATH }}
+                      cd ${{ vars.DEPLOY_PATH }}
                       docker compose pull
                       docker compose up -d --remove-orphans

@@ -211,14 +211,31 @@ jobs:
             - name: Configure (clang-cl + ASan)
               shell: pwsh
               run: |
-                  cmake -S . -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo `
+                  # Locate ASan runtime libs installed with LLVM
+                  $clangRoot = "C:\Program Files\LLVM\lib\clang"
+                  if (-not (Test-Path $clangRoot)) { throw "clang root not found: $clangRoot" }
+
+                  $clangVer = (Get-ChildItem $clangRoot -Directory | Sort-Object Name -Descending | Select-Object -First 1).Name
+                  $asanLibDir = Join-Path $clangRoot "$clangVer\lib\windows"
+                  if (-not (Test-Path $asanLibDir)) { throw "ASan lib dir not found: $asanLibDir" }
+
+                  # Verify libs exist (helps debugging if LLVM package layout changes)
+                  $asan1 = Join-Path $asanLibDir "clang_rt.asan_dynamic-x86_64.lib"
+                  $asan2 = Join-Path $asanLibDir "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
+                  if (-not (Test-Path $asan1)) { throw "Missing: $asan1" }
+                  if (-not (Test-Path $asan2)) { throw "Missing: $asan2" }
+
+                  cmake -S . -B build-asan -G Ninja `
+                    -DCMAKE_BUILD_TYPE=RelWithDebInfo `
                     -DCMAKE_C_COMPILER=clang-cl `
                     -DCMAKE_CXX_COMPILER=clang-cl `
+                    -DCMAKE_TOOLCHAIN_FILE="$tc" `
+                    -DVCPKG_TARGET_TRIPLET=x64-windows `
                     -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
-                    -DCMAKE_C_FLAGS="/fsanitize=address /Zi /Od" `
-                    -DCMAKE_CXX_FLAGS="/fsanitize=address /Zi /Od" `
-                    -DCMAKE_SHARED_LINKER_FLAGS="/INCREMENTAL:NO" `
-                    -DCMAKE_EXE_LINKER_FLAGS="/INCREMENTAL:NO"
+                    -DCMAKE_C_FLAGS="/fsanitize=address /Zi" `
+                    -DCMAKE_CXX_FLAGS="/fsanitize=address /Zi" `
+                    -DCMAKE_EXE_LINKER_FLAGS="/INCREMENTAL:NO /LIBPATH:`"$asanLibDir`" clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib" `
+                    -DCMAKE_SHARED_LINKER_FLAGS="/INCREMENTAL:NO /LIBPATH:`"$asanLibDir`" clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
 
             - name: Build
               run: cmake --build build-asan --parallel
