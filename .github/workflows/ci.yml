@@ -60,7 +60,7 @@ jobs:
               uses: actions/cache@v4
               with:
                   path: |
-                      C:\Users\ADMIN\Documents\3_Dev\vcpkg
+                      C:\vcpkg
                   key: vcpkg-${{ runner.os }}-${{ hashFiles('.gitmodules') }}
                   restore-keys: |
                       vcpkg-${{ runner.os }}-
@@ -69,7 +69,7 @@ jobs:
               if: runner.os == 'Windows'
               shell: pwsh
               run: |
-                  $vcpkgRoot = "C:\Users\ADMIN\Documents\3_Dev\vcpkg"
+                  $vcpkgRoot = "C:\vcpkg"
                   New-Item -ItemType Directory -Force -Path $vcpkgRoot | Out-Null
 
                   if (-not (Test-Path "$vcpkgRoot\.git")) {
@@ -110,7 +110,7 @@ jobs:
               if: runner.os == 'Windows'
               shell: pwsh
               run: |
-                  $tc = "C:\Users\ADMIN\Documents\3_Dev\vcpkg\scripts\buildsystems\vcpkg.cmake"
+                  $tc = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
                   cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug `
                     -DCMAKE_TOOLCHAIN_FILE="$tc"
 
@@ -207,6 +207,33 @@ jobs:
                   choco install llvm -y --no-progress
                   $llvmBin = "C:\\Program Files\\LLVM\\bin"
                   echo $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+            - name: Cache vcpkg (Windows)
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      C:\vcpkg
+                  key: vcpkg-${{ runner.os }}-${{ hashFiles('.gitmodules') }}
+                  restore-keys: |
+                      vcpkg-${{ runner.os }}-
+
+            - name: Install deps with vcpkg (Windows)
+              shell: pwsh
+              run: |
+                  $vcpkgRoot = "C:\vcpkg"
+                  if (-not (Test-Path "$vcpkgRoot\.git")) {
+                    git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
+                  }
+                  Push-Location $vcpkgRoot
+                  git pull
+                  .\bootstrap-vcpkg.bat
+                  .\vcpkg.exe install libsodium:x64-windows libpq:x64-windows
+                  Pop-Location
+
+                  # sanity check: sodium.h must exist
+                  if (-not (Test-Path "C:\vcpkg\installed\x64-windows\include\sodium.h")) {
+                    throw "sodium.h not found in vcpkg installed tree"
+                  }
 
             - name: Configure (clang-cl + ASan)
               shell: pwsh
