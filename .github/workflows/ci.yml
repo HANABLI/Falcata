@@ -238,6 +238,7 @@ jobs:
             - name: Configure (clang-cl + ASan)
               shell: pwsh
               run: |
+                  $tc = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
                   # Locate ASan runtime libs installed with LLVM
                   $clangRoot = "C:\Program Files\LLVM\lib\clang"
                   if (-not (Test-Path $clangRoot)) { throw "clang root not found: $clangRoot" }
