@@ -204,7 +204,7 @@ jobs:
             - name: Install LLVM (Windows)
               shell: pwsh
               run: |
-                  choco install llvm -y --no-progress
+                  choco install llvm --version=20.1.8 -y --no-progress
                   $llvmBin = "C:\\Program Files\\LLVM\\bin"
                   echo $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
@@ -247,16 +247,11 @@ jobs:
                   $asanLibDir = Join-Path $clangRoot "$clangVer\lib\windows"
                   if (-not (Test-Path $asanLibDir)) { throw "ASan lib dir not found: $asanLibDir" }
 
-                  $asanBinDir = Join-Path $clangRoot "$clangVer\bin"
-
                   # Verify libs exist (helps debugging if LLVM package layout changes)
                   $asan1 = Join-Path $asanLibDir "clang_rt.asan_dynamic-x86_64.lib"
                   $asan2 = Join-Path $asanLibDir "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
                   if (-not (Test-Path $asan1)) { throw "Missing: $asan1" }
                   if (-not (Test-Path $asan2)) { throw "Missing: $asan2" }
-
-                  Copy-Item (Join-Path $asanBinDir "clang_rt.asan_dynamic-x86_64.dll") -Destination "build-asan" -Force
-                  Copy-Item (Join-Path $asanBinDir "clang_rt.asan_dynamic_runtime_thunk-x86_64.dll") -Destination "build-asan" -Force
 
                   cmake -S . -B build-asan -G Ninja `
                     -DCMAKE_BUILD_TYPE=RelWithDebInfo `
@@ -272,6 +267,16 @@ jobs:
 
             - name: Build
               run: cmake --build build-asan --parallel
+
+            - name: Prepare ASan runtime DLLs
+              shell: pwsh
+              run: |
+                  $clangRoot = "C:\Program Files\LLVM\lib\clang"
+                  $clangVer  = (Get-ChildItem $clangRoot -Directory | Sort-Object Name -Descending | Select-Object -First 1).Name
+                  $asanBinDir = Join-Path $clangRoot "$clangVer\bin"
+
+                  Copy-Item (Join-Path $asanBinDir "clang_rt.asan_dynamic-x86_64.dll") -Destination "build-asan" -Force
+                  Copy-Item (Join-Path $asanBinDir "clang_rt.asan_dynamic_runtime_thunk-x86_64.dll") -Destination "build-asan" -Force
 
             - name: Test
               shell: pwsh
