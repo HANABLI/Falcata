@@ -9,31 +9,17 @@ permissions:
     contents: write
     packages: write
 
-concurrency:
-    group: release-${{ github.ref }}
-    cancel-in-progress: false
-
 jobs:
-    create-release:
-        name: Create GitHub Release
-        runs-on: ubuntu-22.04
-        steps:
-            - name: Create Release (notes)
-              uses: softprops/action-gh-release@v2
-              with:
-                  generate_release_notes: true
-
+    # 1) Build Windows release binary and upload as a Release asset
     windows-binary:
-        name: Windows Release (MSVC + vcpkg)
+        name: Windows Release (MSVC)
         runs-on: windows-2022
-        needs: create-release
 
         steps:
             - name: Checkout (with submodules)
               uses: actions/checkout@v4
               with:
                   submodules: recursive
-                  fetch-depth: 0
 
             - name: Setup Ninja
               uses: seanmiddleditch/gha-setup-ninja@v5
@@ -41,93 +27,70 @@ jobs:
             - name: MSVC Dev Cmd
               uses: ilammy/msvc-dev-cmd@v1
 
-            # vcpkg at C:\vcpkg (recommended for GH runners)
-            - name: Cache vcpkg
-              uses: actions/cache@v4
-              with:
-                  path: C:\vcpkg
-                  key: vcpkg-windows-${{ hashFiles('.gitmodules') }}
-                  restore-keys: |
-                      vcpkg-windows-
-
-            - name: Install deps with vcpkg (libsodium, libpq)
-              shell: pwsh
-              run: |
-                  $vcpkgRoot = "C:\vcpkg"
-                  if (-not (Test-Path "$vcpkgRoot\.git")) {
-                    git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
-                  }
-                  Push-Location $vcpkgRoot
-                  git pull
-                  .\bootstrap-vcpkg.bat
-                  .\vcpkg.exe install libsodium:x64-windows libpq:x64-windows
-                  Pop-Location
-
-                  if (-not (Test-Path "C:\vcpkg\installed\x64-windows\include\sodium.h")) { throw "sodium.h not found" }
-                  if (-not (Test-Path "C:\vcpkg\installed\x64-windows\include\libpq-fe.h")) { throw "libpq-fe.h not found" }
-
             - name: Configure (Release)
-              shell: pwsh
               run: |
-                  $tc = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
-                  cmake -S . -B build -G Ninja `
-                    -DCMAKE_BUILD_TYPE=Release `
-                    -DCMAKE_TOOLCHAIN_FILE="$tc" `
-                    -DVCPKG_TARGET_TRIPLET=x64-windows
+                  cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
             - name: Build
-              shell: pwsh
               run: |
                   cmake --build build --parallel
 
+            # Optional: run tests in Release too
             - name: Test
-              shell: pwsh
               run: |
-                  ctest --test-dir build --output-on-failure -C Release
+                  cd build
+                  ctest --output-on-failure -C Release
 
-            - name: Package (zip)
+            - name: Package artifact
               shell: pwsh
               run: |
                   New-Item -ItemType Directory -Force -Path dist | Out-Null
                   $tag = "${{ github.ref_name }}"
-
+                  # Your top-level CMake sets runtime output to build/ (binary likely in build\WebServer.exe or build\WebServer\WebServer.exe depending on submodule)
+                  # Adjust the path below if needed after first run:
                   $binCandidates = @(
                     "build\WebServer.exe",
                     "build\WebServer\WebServer.exe",
                     "build\bin\WebServer.exe"
                   )
                   $bin = $binCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-                  if (-not $bin) { throw "WebServer.exe not found: $($binCandidates -join ', ')" }
+                  if (-not $bin) { throw "WebServer.exe not found in expected locations: $($binCandidates -join ', ')" }
 
                   Copy-Item $bin -Destination "dist\WebServer.exe" -Force
 
-                  # optional config example
-                  if (Test-Path "config.json") {
-                    Copy-Item "config.json" "dist\config.example.json" -Force
-                  }
+                  # Ship config example (optional)
+                  if (Test-Path "config.json") { Copy-Item "config.json" "dist\config.example.json" -Force }
 
                   Compress-Archive -Path dist\* -DestinationPath "Falcata-${tag}-win64.zip" -Force
 
-            - name: Upload asset to GitHub Release
+            - name: Upload Release asset (Windows zip)
               uses: softprops/action-gh-release@v2
               with:
                   files: |
                       Falcata-${{ github.ref_name }}-win64.zip
 
+    # 2) Create GitHub Release notes (once)
+    github-release:
+        name: Create GitHub Release
+        runs-on: ubuntu-22.04
+        needs: windows-binary
+        steps:
+            - name: Create Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  generate_release_notes: true
+
+    # 3) Build + push Docker image (Linux)
     docker-build-push:
         name: Docker build & push (GHCR)
         runs-on: ubuntu-22.04
-        needs: windows-binary
+        needs: github-release
 
         steps:
             - name: Checkout (with submodules)
               uses: actions/checkout@v4
               with:
                   submodules: recursive
-                  fetch-depth: 0
-
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v3
 
             - name: Login to GHCR
               uses: docker/login-action@v3
@@ -136,20 +99,26 @@ jobs:
                   username: ${{ github.actor }}
                   password: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Build & Push
-              shell: bash
+            - name: Build image
               run: |
-                  IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
-                  docker build -t "${IMAGE}:${GITHUB_REF_NAME}" -t "${IMAGE}:latest" .
-                  docker push "${IMAGE}:${GITHUB_REF_NAME}"
+                  IMAGE="ghcr.io/${{ github.repository }}"
+                  docker build \
+                    -t "${IMAGE}:${{ github.ref_name }}" \
+                    -t "${IMAGE}:latest" \
+                    .
+
+            - name: Push image
+              run: |
+                  IMAGE="ghcr.io/${{ github.repository }}"
+                  docker push "${IMAGE}:${{ github.ref_name }}"
                   docker push "${IMAGE}:latest"
 
+    # 4) Optional: deploy to your Docker machine via SSH (only if secrets exist)
     deploy:
         name: Deploy (docker compose pull + up)
         runs-on: ubuntu-22.04
         needs: docker-build-push
-
-        # only run if you define repository/org variable DEPLOY_HOST
+        environment: secrets
         if: ${{ vars.DEPLOY_HOST != '' }}
 
         steps:
@@ -161,6 +130,6 @@ jobs:
                   key: ${{ secrets.DEPLOY_SSH_KEY }}
                   script: |
                       set -e
-                      cd "${{ vars.DEPLOY_PATH }}"
+                      cd ${{ vars.DEPLOY_PATH }}
                       docker compose pull
                       docker compose up -d --remove-orphans
