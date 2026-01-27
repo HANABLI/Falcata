@@ -239,6 +239,7 @@ jobs:
               shell: pwsh
               run: |
                   $tc = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
+
                   # Locate ASan runtime libs installed with LLVM
                   $clangRoot = "C:\Program Files\LLVM\lib\clang"
                   if (-not (Test-Path $clangRoot)) { throw "clang root not found: $clangRoot" }
@@ -247,11 +248,18 @@ jobs:
                   $asanLibDir = Join-Path $clangRoot "$clangVer\lib\windows"
                   if (-not (Test-Path $asanLibDir)) { throw "ASan lib dir not found: $asanLibDir" }
 
-                  # Verify libs exist (helps debugging if LLVM package layout changes)
                   $asan1 = Join-Path $asanLibDir "clang_rt.asan_dynamic-x86_64.lib"
                   $asan2 = Join-Path $asanLibDir "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
+
                   if (-not (Test-Path $asan1)) { throw "Missing: $asan1" }
-                  if (-not (Test-Path $asan2)) { throw "Missing: $asan2" }
+
+                  $linkExtras = "/LIBPATH:`"$asanLibDir`" clang_rt.asan_dynamic-x86_64.lib"
+                  if (Test-Path $asan2) {
+                    $linkExtras += " clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
+                    Write-Host "Using thunk lib: $asan2"
+                  } else {
+                    Write-Host "Thunk lib not found (OK on some LLVM packages)."
+                  }
 
                   cmake -S . -B build-asan -G Ninja `
                     -DCMAKE_BUILD_TYPE=RelWithDebInfo `
@@ -262,35 +270,45 @@ jobs:
                     -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
                     -DCMAKE_C_FLAGS="/fsanitize=address /Zi" `
                     -DCMAKE_CXX_FLAGS="/fsanitize=address /Zi" `
-                    -DCMAKE_EXE_LINKER_FLAGS="/INCREMENTAL:NO /LIBPATH:`"$asanLibDir`" clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib" `
-                    -DCMAKE_SHARED_LINKER_FLAGS="/INCREMENTAL:NO /LIBPATH:`"$asanLibDir`" clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
+                    -DCMAKE_EXE_LINKER_FLAGS="/INCREMENTAL:NO $linkExtras" `
+                    -DCMAKE_SHARED_LINKER_FLAGS="/INCREMENTAL:NO $linkExtras"
 
             - name: Build
               run: cmake --build build-asan --parallel
 
-            - name: Prepare ASan runtime DLLs
+            - name: Prepare ASan runtime DLLs (copy next to test exes)
               shell: pwsh
               run: |
-                  $clangRoot = "C:\Program Files\LLVM\lib\clang"
-                  if (-not (Test-Path $clangRoot)) { throw "clang root not found: $clangRoot" }
+                  $llvmRoot = "C:\Program Files\LLVM"
+                  if (-not (Test-Path $llvmRoot)) { throw "LLVM root not found: $llvmRoot" }
 
-                  $clangVer = (Get-ChildItem $clangRoot -Directory | Sort-Object Name -Descending | Select-Object -First 1).Name
-                  $verRoot  = Join-Path $clangRoot $clangVer
+                  # Find ASan DLLs (package layout varies)
+                  $asanDlls = Get-ChildItem $llvmRoot -Recurse -Filter "clang_rt.asan*_x86_64.dll" -ErrorAction SilentlyContinue
+                  if (-not $asanDlls -or $asanDlls.Count -eq 0) {
+                    # fallback pattern some packages use
+                    $asanDlls = Get-ChildItem $llvmRoot -Recurse -Filter "clang_rt.asan*.dll" -ErrorAction SilentlyContinue
+                  }
 
-                  Write-Host "clang version dir: $verRoot"
+                  if (-not $asanDlls -or $asanDlls.Count -eq 0) {
+                    Write-Host "No ASan DLLs found under $llvmRoot"
+                    Get-ChildItem $llvmRoot -Recurse -Filter "*asan*" | Select-Object -First 200 FullName | ForEach-Object { Write-Host $_ }
+                    throw "ASan runtime DLLs not found."
+                  }
 
-                  # Find ASan runtime DLLs anywhere under this clang version dir
-                  $dll1 = Get-ChildItem $verRoot -Recurse -Filter "clang_rt.asan_dynamic-x86_64.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
-                  $dll2 = Get-ChildItem $verRoot -Recurse -Filter "clang_rt.asan_dynamic_runtime_thunk-x86_64.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+                  Write-Host "Found ASan DLLs:"
+                  $asanDlls | Select-Object FullName | ForEach-Object { Write-Host $_.FullName }
 
-                  if (-not $dll1) { throw "ASan DLL not found: clang_rt.asan_dynamic-x86_64.dll under $verRoot" }
-                  if (-not $dll2) { throw "ASan DLL not found: clang_rt.asan_dynamic_runtime_thunk-x86_64.dll under $verRoot" }
+                  # Copy DLLs next to every .exe in build-asan (Windows loader searches exe dir first)
+                  $exeDirs = Get-ChildItem "build-asan" -Recurse -Filter "*.exe" | ForEach-Object { $_.Directory.FullName } | Sort-Object -Unique
+                  if (-not $exeDirs -or $exeDirs.Count -eq 0) { throw "No test executables found under build-asan" }
 
-                  Write-Host "Found: $($dll1.FullName)"
-                  Write-Host "Found: $($dll2.FullName)"
+                  foreach ($d in $exeDirs) {
+                    foreach ($dll in $asanDlls) {
+                      Copy-Item $dll.FullName -Destination $d -Force
+                    }
+                  }
 
-                  Copy-Item $dll1.FullName -Destination "build-asan" -Force
-                  Copy-Item $dll2.FullName -Destination "build-asan" -Force
+                  Write-Host "Copied ASan DLLs to $($exeDirs.Count) executable directories."
 
             - name: Test
               shell: pwsh
