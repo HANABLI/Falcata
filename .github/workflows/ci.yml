@@ -272,11 +272,25 @@ jobs:
               shell: pwsh
               run: |
                   $clangRoot = "C:\Program Files\LLVM\lib\clang"
-                  $clangVer  = (Get-ChildItem $clangRoot -Directory | Sort-Object Name -Descending | Select-Object -First 1).Name
-                  $asanBinDir = Join-Path $clangRoot "$clangVer\bin"
+                  if (-not (Test-Path $clangRoot)) { throw "clang root not found: $clangRoot" }
 
-                  Copy-Item (Join-Path $asanBinDir "clang_rt.asan_dynamic-x86_64.dll") -Destination "build-asan" -Force
-                  Copy-Item (Join-Path $asanBinDir "clang_rt.asan_dynamic_runtime_thunk-x86_64.dll") -Destination "build-asan" -Force
+                  $clangVer = (Get-ChildItem $clangRoot -Directory | Sort-Object Name -Descending | Select-Object -First 1).Name
+                  $verRoot  = Join-Path $clangRoot $clangVer
+
+                  Write-Host "clang version dir: $verRoot"
+
+                  # Find ASan runtime DLLs anywhere under this clang version dir
+                  $dll1 = Get-ChildItem $verRoot -Recurse -Filter "clang_rt.asan_dynamic-x86_64.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+                  $dll2 = Get-ChildItem $verRoot -Recurse -Filter "clang_rt.asan_dynamic_runtime_thunk-x86_64.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+
+                  if (-not $dll1) { throw "ASan DLL not found: clang_rt.asan_dynamic-x86_64.dll under $verRoot" }
+                  if (-not $dll2) { throw "ASan DLL not found: clang_rt.asan_dynamic_runtime_thunk-x86_64.dll under $verRoot" }
+
+                  Write-Host "Found: $($dll1.FullName)"
+                  Write-Host "Found: $($dll2.FullName)"
+
+                  Copy-Item $dll1.FullName -Destination "build-asan" -Force
+                  Copy-Item $dll2.FullName -Destination "build-asan" -Force
 
             - name: Test
               shell: pwsh
