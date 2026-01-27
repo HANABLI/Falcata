@@ -9,6 +9,10 @@ permissions:
     contents: write
     packages: write
 
+concurrency:
+    group: release-${{ github.ref }}
+    cancel-in-progress: false
+
 jobs:
     # 1) Build Windows release binary and upload as a Release asset
     windows-binary:
@@ -20,6 +24,7 @@ jobs:
               uses: actions/checkout@v4
               with:
                   submodules: recursive
+                  fetch-depth: 0
 
             - name: Setup Ninja
               uses: seanmiddleditch/gha-setup-ninja@v5
@@ -46,8 +51,7 @@ jobs:
               run: |
                   New-Item -ItemType Directory -Force -Path dist | Out-Null
                   $tag = "${{ github.ref_name }}"
-                  # Your top-level CMake sets runtime output to build/ (binary likely in build\WebServer.exe or build\WebServer\WebServer.exe depending on submodule)
-                  # Adjust the path below if needed after first run:
+
                   $binCandidates = @(
                     "build\WebServer.exe",
                     "build\WebServer\WebServer.exe",
@@ -80,11 +84,12 @@ jobs:
               with:
                   generate_release_notes: true
 
-    # 3) Build + push Docker image (Linux)
+    # 3) Build + push Docker image (Linux)  [DISABLED]
     docker-build-push:
-        name: Docker build & push (GHCR)
+        name: Docker build & push (GHCR) [DISABLED]
         runs-on: ubuntu-22.04
         needs: github-release
+        if: ${{ false }}
 
         steps:
             - name: Checkout (with submodules)
@@ -113,13 +118,12 @@ jobs:
                   docker push "${IMAGE}:${{ github.ref_name }}"
                   docker push "${IMAGE}:latest"
 
-    # 4) Optional: deploy to your Docker machine via SSH (only if secrets exist)
+    # 4) Optional: deploy to your Docker machine via SSH (DISABLED because docker job is disabled)
     deploy:
-        name: Deploy (docker compose pull + up)
+        name: Deploy (docker compose pull + up) [DISABLED]
         runs-on: ubuntu-22.04
         needs: docker-build-push
-        environment: secrets
-        if: ${{ vars.DEPLOY_HOST != '' }}
+        if: ${{ false }}
 
         steps:
             - name: Deploy via SSH
