@@ -124,6 +124,50 @@ jobs:
                   cd build
                   ctest --output-on-failure
 
+            - name: Package binaries (exe + dll/so)
+              shell: pwsh
+              run: |
+                  New-Item -ItemType Directory -Force -Path dist | Out-Null
+
+                  # Main server executable candidates (Windows + Linux styles)
+                  $exeCandidates = @(
+                    "build\WebServer.exe",
+                    "build\WebServer\WebServer.exe",
+                    "build\bin\WebServer.exe",
+                    "build\WebServer",
+                    "build\WebServer\WebServer",
+                    "build\bin\WebServer"
+                  )
+
+                  $exe = $exeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+                  if (-not $exe) { throw "WebServer binary not found in: $($exeCandidates -join ', ')" }
+
+                  Copy-Item $exe -Destination "dist\" -Force
+
+                  # Collect plugins/runtime libs
+                  $dlls = Get-ChildItem -Path "build" -Recurse -File -Filter "*.dll" -ErrorAction SilentlyContinue
+                  # $sos  = Get-ChildItem -Path "build" -Recurse -File -Filter "*.so"  -ErrorAction SilentlyContinue
+
+                  #foreach ($f in @($dlls + $sos)) {
+                  foreach ($f in @($dlls)) {
+                    Copy-Item $f.FullName -Destination "dist\" -Force
+                  }
+
+                  # Optional: include example config
+                  if (Test-Path "config.json") {
+                    Copy-Item "config.json" "dist\config.example.json" -Force
+                  }
+
+                  Compress-Archive -Path dist\* -DestinationPath "Falcata-win64.zip" -Force
+
+            - name: Upload artifact (Windows)
+              uses: actions/upload-artifact@v4
+              with:
+                  name: falcata-win64
+                  path: Falcata-win64.zip
+                  if-no-files-found: error
+                  retention-days: 7
+
             # - name: Clang-Format check (Ubuntu)
             #   if: runner.os == 'Linux'
             #   run: |
