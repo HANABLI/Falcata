@@ -1,4 +1,4 @@
-name: Release
+name: CD Release
 
 on:
     push:
@@ -14,117 +14,87 @@ concurrency:
     cancel-in-progress: false
 
 jobs:
-    # 1) Build Windows release binary and upload as a Release asset
-    windows-binary:
-        name: Windows Release (MSVC)
-        runs-on: windows-2022
-
-        steps:
-            - name: Checkout (with submodules)
-              uses: actions/checkout@v4
-              with:
-                  submodules: recursive
-                  fetch-depth: 0
-
-            - name: Setup Ninja
-              uses: seanmiddleditch/gha-setup-ninja@v5
-
-            - name: MSVC Dev Cmd
-              uses: ilammy/msvc-dev-cmd@v1
-
-            - name: Cache vcpkg
-              uses: actions/cache@v4
-              with:
-                  path: C:\vcpkg
-                  key: vcpkg-windows-${{ hashFiles('.gitmodules')}}
-                  restore-keys: |
-                      vcpkg-windows-
-
-            - name: Install deps with vcpkg (libsodium, libpq)
-              shell: pwsh
-              run: |
-                  $vcpkgRoot = "C:\vcpkg"
-                  if (-not (Test-Path "$vcpkgRoot\.git")) {
-                    git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
-                  }
-                  Push-Location $vcpkgRoot
-                  git pull
-                  .\bootstrap-vcpkg.bat
-                  .\vcpkg.exe install libsodium:x64-windows
-                  Pop-Location
-
-                  if (-not (Test-Path "C:\vcpkg\installed\x64-windows\include\sodium.h"))
-                  if (-not (Test-Path "C:\vcpkg\installed\x64-windows\include\libpq-fe.h"))
-
-            - name: Configure (Release)
-              shell: pwsh
-              run: |
-                  $tc = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
-                  cmake -S . -B build -G Ninja `
-                  -DCMAKE_BUILD_TYPE=Release `
-                  -DCMAKE_TOOLCHAIN_FILE="$tc" `
-                  -DVCPKG_TARGET_TRIPLET=x64-windows
-
-            - name: Build
-              shell: pwsh
-              run: |
-                  cmake --build build --parallel
-
-            # Optional: run tests in Release too
-            - name: Test
-              shell: pwsh
-              run: |
-                  cd build
-                  ctest --test-dir build --output-on-failure -C Release
-
-            - name: Package artifact
-              shell: pwsh
-              run: |
-                  New-Item -ItemType Directory -Force -Path dist | Out-Null
-                  $tag = "${{ github.ref_name }}"
-
-                  $binCandidates = @(
-                    "build\WebServer.exe",
-                    "build\WebServer\WebServer.exe",
-                    "build\bin\WebServer.exe"
-                  )
-                  $bin = $binCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-                  if (-not $bin) { throw "WebServer.exe not found in expected locations: $($binCandidates -join ', ')" }
-
-                  Copy-Item $bin -Destination "dist\WebServer.exe" -Force
-
-                  # Ship config example (optional)
-                  if (Test-Path "config.json") { Copy-Item "config.json" "dist\config.example.json" -Force }
-
-                  Compress-Archive -Path dist\* -DestinationPath "Falcata-${tag}-win64.zip" -Force
-
-            - name: Upload Release asset (Windows zip)
-              uses: softprops/action-gh-release@v2
-              with:
-                  files: |
-                      Falcata-${{ github.ref_name }}-win64.zip
-
-    # 2) Create GitHub Release notes (once)
-    github-release:
-        name: Create GitHub Release
+    download-binaries:
+        name: Download binaries from CI
         runs-on: ubuntu-22.04
-        needs: windows-binary
+        outputs:
+            has_win: ${{ steps.check.outputs.has_win }}
+            has_linux: ${{ steps.check.outputs.has_linux }}
+
         steps:
-            - name: Create Release
+            - name: Download Windows artifact from CI (same commit)
+              id: dl_win
+              uses: dawidd6/action-download-artifact@v3
+              with:
+                  # IMPORTANT: must match your CI workflow file name or workflow name
+                  # Examples: "ci.yml" OR "CI" OR "CI-CD"
+                  workflow: ci.yml
+
+                  # download artifact produced for the same commit sha as this tag
+                  commit: ${{ github.sha }}
+
+                  # IMPORTANT: must match artifact name used in CI
+                  name: falcata-win64
+                  path: dist/win
+
+                  # Fail the job if not found (CD relies on CI output)
+                  if_no_artifact_found: fail
+
+            # OPTIONAL: if you also build linux binary in CI, keep this.
+            - name: Download Linux artifact from CI (same commit) (optional)
+              id: dl_linux
+              continue-on-error: true
+              uses: dawidd6/action-download-artifact@v3
+              with:
+                  workflow: ci.yml
+                  commit: ${{ github.sha }}
+                  name: falcata-linux
+                  path: dist/linux
+                  if_no_artifact_found: ignore
+
+            - name: Check what we have
+              id: check
+              shell: bash
+              run: |
+                  set -e
+                  if ls dist/win/* >/dev/null 2>&1; then echo "has_win=true" >> $GITHUB_OUTPUT; else echo "has_win=false" >> $GITHUB_OUTPUT; fi
+                  if ls dist/linux/* >/dev/null 2>&1; then echo "has_linux=true" >> $GITHUB_OUTPUT; else echo "has_linux=false" >> $GITHUB_OUTPUT; fi
+                  echo "Windows files:"; ls -la dist/win || true
+                  echo "Linux files:"; ls -la dist/linux || true
+
+            - name: Upload as workflow artifact (for next jobs)
+              uses: actions/upload-artifact@v4
+              with:
+                  name: release-dist
+                  path: dist
+
+    github-release:
+        name: Create GitHub Release + upload assets
+        runs-on: ubuntu-22.04
+        needs: download-binaries
+
+        steps:
+            - name: Download dist bundle from previous job
+              uses: actions/download-artifact@v4
+              with:
+                  name: release-dist
+                  path: dist
+
+            - name: Create GitHub Release and upload assets
               uses: softprops/action-gh-release@v2
               with:
                   generate_release_notes: true
+                  files: |
+                      dist/win/**
+                      dist/linux/**
 
-    # 3) Build + push Docker image (Linux)  [DISABLED]
-    docker-build-push:
-        name: Docker build & push (GHCR) [DISABLED]
+    docker-publish:
+        name: Docker build & push (GHCR)
         runs-on: ubuntu-22.04
         needs: github-release
-        if: ${{ false }}
 
         steps:
-            - name: Checkout (with submodules)
-              uses: actions/checkout@v4
+            - uses: actions/checkout@v4
               with:
                   submodules: recursive
 
@@ -138,29 +108,23 @@ jobs:
                   username: ${{ github.actor }}
                   password: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Build image
+            - name: Build & push
+              shell: bash
               run: |
-                  IMAGE="ghcr.io/${{ github.repository }}"
-                  docker build \
-                    -t "${IMAGE}:${{ github.ref_name }}" \
-                    -t "${IMAGE}:latest" \
-                    .
-
-            - name: Push image
-              run: |
-                  IMAGE="ghcr.io/${{ github.repository }}"
-                  docker push "${IMAGE}:${{ github.ref_name }}"
+                  IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+                  TAG="${GITHUB_REF_NAME}"
+                  docker build -t "${IMAGE}:${TAG}" -t "${IMAGE}:latest" .
+                  docker push "${IMAGE}:${TAG}"
                   docker push "${IMAGE}:latest"
 
-    # 4) Optional: deploy to your Docker machine via SSH (DISABLED because docker job is disabled)
     deploy:
-        name: Deploy (docker compose pull + up) [DISABLED]
+        name: Deploy on Docker machine (optional)
         runs-on: ubuntu-22.04
-        needs: docker-build-push
-        if: ${{ false }}
+        needs: docker-publish
+        if: ${{ vars.DEPLOY_HOST != '' }}
 
         steps:
-            - name: Deploy via SSH
+            - name: Deploy via SSH (docker compose pull + up)
               uses: appleboy/ssh-action@v1.0.3
               with:
                   host: ${{ vars.DEPLOY_HOST }}
@@ -168,6 +132,6 @@ jobs:
                   key: ${{ secrets.DEPLOY_SSH_KEY }}
                   script: |
                       set -e
-                      cd ${{ vars.DEPLOY_PATH }}
+                      cd "${{ vars.DEPLOY_PATH }}"
                       docker compose pull
                       docker compose up -d --remove-orphans
