@@ -189,8 +189,6 @@ jobs:
     sanitizers-windows:
         name: Sanitizers (Windows ASan)
         runs-on: windows-2022
-        env:
-            ASAN_OPTIONS: detect_container_overflow=0:halt_on_error=1:abort_on_error=1:strict_string_checks=1
         steps:
             - name: Checkout (with submodules)
               uses: actions/checkout@v4
@@ -316,6 +314,7 @@ jobs:
               shell: pwsh
               run: |
                   # Ensure ASan runtime DLL can be found
+                  $env:ASAN_OPTIONS = "detect_container_overflow=0:halt_on_error=1:abort_on_error=1:strict_string_checks=1"
                   $llvmBin = "C:\\Program Files\\LLVM\\bin"
                   $env:PATH = "$llvmBin;$env:PATH"
                   cd build-asan
