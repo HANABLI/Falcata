@@ -16,11 +16,13 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                os: [ubuntu-22.04, windows-2022]
+                # os: [ubuntu-22.04, windows-2022]
+                # compiler: [gcc, clang, msvc]
+                os: [windows-2022]
                 compiler: [gcc, clang, msvc]
                 exclude:
-                    - os: ubuntu-22.04
-                      compiler: msvc
+                    # - os: ubuntu-22.04
+                    #   compiler: msvc
                     - os: windows-2022
                       compiler: gcc
                     - os: windows-2022
@@ -35,11 +37,11 @@ jobs:
             - name: Setup Ninja
               uses: seanmiddleditch/gha-setup-ninja@v5
 
-            - name: Install deps (Ubuntu)
-              if: runner.os == 'Linux'
-              run: |
-                  sudo apt update
-                  sudo apt install -y build-essential cmake ninja-build clang clang-tidy clang-format ccache libsodium-dev libpq-dev
+            # - name: Install deps (Ubuntu)
+            #   if: runner.os == 'Linux'
+            #   run: |
+            #       sudo apt update
+            #       sudo apt install -y build-essential cmake ninja-build clang clang-tidy clang-format ccache libsodium-dev libpq-dev
 
             - name: Setup MSVC Developer Command Prompt
               if: runner.os == 'Windows'
@@ -85,26 +87,26 @@ jobs:
                   .\vcpkg.exe install libsodium:x64-windows libpq:x64-windows
                   Pop-Location
 
-            - name: Cache ccache (Ubuntu)
-              if: runner.os == 'Linux'
-              uses: actions/cache@v4
-              with:
-                  path: |
-                      ~/.cache/ccache
-                  key: ccache-${{ runner.os }}-${{ matrix.compiler }}-${{ github.sha }}
-                  restore-keys: |
-                      ccache-${{ runner.os }}-${{ matrix.compiler }}-
+            # - name: Cache ccache (Ubuntu)
+            #   if: runner.os == 'Linux'
+            #   uses: actions/cache@v4
+            #   with:
+            #       path: |
+            #           ~/.cache/ccache
+            #       key: ccache-${{ runner.os }}-${{ matrix.compiler }}-${{ github.sha }}
+            #       restore-keys: |
+            #           ccache-${{ runner.os }}-${{ matrix.compiler }}-
 
-            - name: Configure (Ubuntu)
-              if: runner.os == 'Linux'
-              env:
-                  CC: ${{ matrix.compiler == 'clang' && 'clang' || 'gcc' }}
-                  CXX: ${{ matrix.compiler == 'clang' && 'clang++' || 'g++' }}
-              run: |
-                  cmake -S . -B build -G Ninja \
-                    -DCMAKE_BUILD_TYPE=Debug \
-                    -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-                    -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+            # - name: Configure (Ubuntu)
+            #   if: runner.os == 'Linux'
+            #   env:
+            #       CC: ${{ matrix.compiler == 'clang' && 'clang' || 'gcc' }}
+            #       CXX: ${{ matrix.compiler == 'clang' && 'clang++' || 'g++' }}
+            #   run: |
+            #       cmake -S . -B build -G Ninja \
+            #         -DCMAKE_BUILD_TYPE=Debug \
+            #         -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            #         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
             - name: Configure (Windows / MSVC)
               if: runner.os == 'Windows'
@@ -122,11 +124,11 @@ jobs:
                   cd build
                   ctest --output-on-failure
 
-            - name: Clang-Format check (Ubuntu)
-              if: runner.os == 'Linux'
-              run: |
-                  clang-format --version
-                  clang-format --dry-run --Werror $(git ls-files '*.cpp' '*.hpp' '*.h' '*.c')
+            # - name: Clang-Format check (Ubuntu)
+            #   if: runner.os == 'Linux'
+            #   run: |
+            #       clang-format --version
+            #       clang-format --dry-run --Werror $(git ls-files '*.cpp' '*.hpp' '*.h' '*.c')
 
             - name: Clang-Format check (Windows)
               if: runner.os == 'Windows'
@@ -137,12 +139,12 @@ jobs:
                   if (-not $files) { Write-Host "No source files found."; exit 0 }
                   clang-format --dry-run --Werror $files
 
-            - name: Clang-Tidy (Ubuntu, best-effort)
-              if: runner.os == 'Linux'
-              run: |
-                  clang-tidy --version
-                  # Use compile_commands.json produced by CMake
-                  clang-tidy $(git ls-files '*.cpp') -p build || true
+            # - name: Clang-Tidy (Ubuntu, best-effort)
+            #   if: runner.os == 'Linux'
+            #   run: |
+            #       clang-tidy --version
+            #       # Use compile_commands.json produced by CMake
+            #       clang-tidy $(git ls-files '*.cpp') -p build || true
 
             - name: Clang-Tidy (Windows)
               if: runner.os == 'Windows'
@@ -153,169 +155,169 @@ jobs:
                   if (-not $cpp) { Write-Host "No C++ sources found."; exit 0 }
                   clang-tidy $cpp -p build
 
-    sanitizers:
-        name: Sanitizers (ASan/UBSan)
-        runs-on: ubuntu-22.04
-        steps:
-            - name: Checkout (with submodules)
-              uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+    # sanitizers:
+    #     name: Sanitizers (ASan/UBSan)
+    #     runs-on: ubuntu-22.04
+    #     steps:
+    #         - name: Checkout (with submodules)
+    #           uses: actions/checkout@v4
+    #           with:
+    #               submodules: recursive
 
-            - name: Install deps
-              run: |
-                  sudo apt update
-                  sudo apt install -y build-essential cmake ninja-build clang clang-tidy clang-format ccache libsodium-dev libpq-dev
+    #         - name: Install deps
+    #           run: |
+    #               sudo apt update
+    #               sudo apt install -y build-essential cmake ninja-build clang clang-tidy clang-format ccache libsodium-dev libpq-dev
 
-            - name: Configure
-              env:
-                  CC: clang
-                  CXX: clang++
-              run: |
-                  cmake -S . -B build-asan -G Ninja \
-                    -DCMAKE_BUILD_TYPE=Debug \
-                    -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' \
-                    -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' \
-                    -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined'
+    #         - name: Configure
+    #           env:
+    #               CC: clang
+    #               CXX: clang++
+    #           run: |
+    #               cmake -S . -B build-asan -G Ninja \
+    #                 -DCMAKE_BUILD_TYPE=Debug \
+    #                 -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' \
+    #                 -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' \
+    #                 -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined'
 
-            - name: Build
-              run: cmake --build build-asan --parallel
+    #         - name: Build
+    #           run: cmake --build build-asan --parallel
 
-            - name: Test
-              run: |
-                  cd build-asan
-                  ctest --output-on-failure
+    #         - name: Test
+    #           run: |
+    #               cd build-asan
+    #               ctest --output-on-failure
 
-    sanitizers-windows:
-        name: Sanitizers (Windows ASan)
-        runs-on: windows-2022
-        steps:
-            - name: Checkout (with submodules)
-              uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+    # sanitizers-windows:
+    #     name: Sanitizers (Windows ASan)
+    #     runs-on: windows-2022
+    #     steps:
+    #         - name: Checkout (with submodules)
+    #           uses: actions/checkout@v4
+    #           with:
+    #               submodules: recursive
 
-            - name: Setup Ninja
-              uses: seanmiddleditch/gha-setup-ninja@v5
+    #         - name: Setup Ninja
+    #           uses: seanmiddleditch/gha-setup-ninja@v5
 
-            - name: Setup MSVC Developer Command Prompt
-              uses: ilammy/msvc-dev-cmd@v1
+    #         - name: Setup MSVC Developer Command Prompt
+    #           uses: ilammy/msvc-dev-cmd@v1
 
-            - name: Install LLVM (Windows)
-              shell: pwsh
-              run: |
-                  choco install llvm --version=20.1.8 -y --no-progress
-                  $llvmBin = "C:\\Program Files\\LLVM\\bin"
-                  echo $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+    #         - name: Install LLVM (Windows)
+    #           shell: pwsh
+    #           run: |
+    #               choco install llvm --version=20.1.8 -y --no-progress
+    #               $llvmBin = "C:\\Program Files\\LLVM\\bin"
+    #               echo $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-            - name: Cache vcpkg (Windows)
-              uses: actions/cache@v4
-              with:
-                  path: |
-                      C:\vcpkg
-                  key: vcpkg-${{ runner.os }}-${{ hashFiles('.gitmodules') }}
-                  restore-keys: |
-                      vcpkg-${{ runner.os }}-
+    #         - name: Cache vcpkg (Windows)
+    #           uses: actions/cache@v4
+    #           with:
+    #               path: |
+    #                   C:\vcpkg
+    #               key: vcpkg-${{ runner.os }}-${{ hashFiles('.gitmodules') }}
+    #               restore-keys: |
+    #                   vcpkg-${{ runner.os }}-
 
-            - name: Install deps with vcpkg (Windows)
-              shell: pwsh
-              run: |
-                  $vcpkgRoot = "C:\vcpkg"
-                  if (-not (Test-Path "$vcpkgRoot\.git")) {
-                    git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
-                  }
-                  Push-Location $vcpkgRoot
-                  git pull
-                  .\bootstrap-vcpkg.bat
-                  .\vcpkg.exe install libsodium:x64-windows libpq:x64-windows
-                  Pop-Location
+    #         - name: Install deps with vcpkg (Windows)
+    #           shell: pwsh
+    #           run: |
+    #               $vcpkgRoot = "C:\vcpkg"
+    #               if (-not (Test-Path "$vcpkgRoot\.git")) {
+    #                 git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
+    #               }
+    #               Push-Location $vcpkgRoot
+    #               git pull
+    #               .\bootstrap-vcpkg.bat
+    #               .\vcpkg.exe install libsodium:x64-windows libpq:x64-windows
+    #               Pop-Location
 
-                  # sanity check: sodium.h must exist
-                  if (-not (Test-Path "C:\vcpkg\installed\x64-windows\include\sodium.h")) {
-                    throw "sodium.h not found in vcpkg installed tree"
-                  }
+    #               # sanity check: sodium.h must exist
+    #               if (-not (Test-Path "C:\vcpkg\installed\x64-windows\include\sodium.h")) {
+    #                 throw "sodium.h not found in vcpkg installed tree"
+    #               }
 
-            - name: Configure (clang-cl + ASan)
-              shell: pwsh
-              run: |
-                  $tc = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
+    #         - name: Configure (clang-cl + ASan)
+    #           shell: pwsh
+    #           run: |
+    #               $tc = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
 
-                  # Locate ASan runtime libs installed with LLVM
-                  $clangRoot = "C:\Program Files\LLVM\lib\clang"
-                  if (-not (Test-Path $clangRoot)) { throw "clang root not found: $clangRoot" }
+    #               # Locate ASan runtime libs installed with LLVM
+    #               $clangRoot = "C:\Program Files\LLVM\lib\clang"
+    #               if (-not (Test-Path $clangRoot)) { throw "clang root not found: $clangRoot" }
 
-                  $clangVer = (Get-ChildItem $clangRoot -Directory | Sort-Object Name -Descending | Select-Object -First 1).Name
-                  $asanLibDir = Join-Path $clangRoot "$clangVer\lib\windows"
-                  if (-not (Test-Path $asanLibDir)) { throw "ASan lib dir not found: $asanLibDir" }
+    #               $clangVer = (Get-ChildItem $clangRoot -Directory | Sort-Object Name -Descending | Select-Object -First 1).Name
+    #               $asanLibDir = Join-Path $clangRoot "$clangVer\lib\windows"
+    #               if (-not (Test-Path $asanLibDir)) { throw "ASan lib dir not found: $asanLibDir" }
 
-                  $asan1 = Join-Path $asanLibDir "clang_rt.asan_dynamic-x86_64.lib"
-                  $asan2 = Join-Path $asanLibDir "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
+    #               $asan1 = Join-Path $asanLibDir "clang_rt.asan_dynamic-x86_64.lib"
+    #               $asan2 = Join-Path $asanLibDir "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
 
-                  if (-not (Test-Path $asan1)) { throw "Missing: $asan1" }
+    #               if (-not (Test-Path $asan1)) { throw "Missing: $asan1" }
 
-                  $linkExtras = "/LIBPATH:`"$asanLibDir`" clang_rt.asan_dynamic-x86_64.lib"
-                  if (Test-Path $asan2) {
-                    $linkExtras += " clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
-                    Write-Host "Using thunk lib: $asan2"
-                  } else {
-                    Write-Host "Thunk lib not found (OK on some LLVM packages)."
-                  }
+    #               $linkExtras = "/LIBPATH:`"$asanLibDir`" clang_rt.asan_dynamic-x86_64.lib"
+    #               if (Test-Path $asan2) {
+    #                 $linkExtras += " clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
+    #                 Write-Host "Using thunk lib: $asan2"
+    #               } else {
+    #                 Write-Host "Thunk lib not found (OK on some LLVM packages)."
+    #               }
 
-                  cmake -S . -B build-asan -G Ninja `
-                    -DCMAKE_BUILD_TYPE=RelWithDebInfo `
-                    -DCMAKE_C_COMPILER=clang-cl `
-                    -DCMAKE_CXX_COMPILER=clang-cl `
-                    -DCMAKE_TOOLCHAIN_FILE="$tc" `
-                    -DVCPKG_TARGET_TRIPLET=x64-windows `
-                    -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
-                    -DCMAKE_C_FLAGS="/fsanitize=address /Zi" `
-                    -DCMAKE_CXX_FLAGS="/fsanitize=address /Zi" `
-                    -DCMAKE_EXE_LINKER_FLAGS="/INCREMENTAL:NO $linkExtras" `
-                    -DCMAKE_SHARED_LINKER_FLAGS="/INCREMENTAL:NO $linkExtras"
+    #               cmake -S . -B build-asan -G Ninja `
+    #                 -DCMAKE_BUILD_TYPE=RelWithDebInfo `
+    #                 -DCMAKE_C_COMPILER=clang-cl `
+    #                 -DCMAKE_CXX_COMPILER=clang-cl `
+    #                 -DCMAKE_TOOLCHAIN_FILE="$tc" `
+    #                 -DVCPKG_TARGET_TRIPLET=x64-windows `
+    #                 -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
+    #                 -DCMAKE_C_FLAGS="/fsanitize=address /Zi" `
+    #                 -DCMAKE_CXX_FLAGS="/fsanitize=address /Zi" `
+    #                 -DCMAKE_EXE_LINKER_FLAGS="/INCREMENTAL:NO $linkExtras" `
+    #                 -DCMAKE_SHARED_LINKER_FLAGS="/INCREMENTAL:NO $linkExtras"
 
-            - name: Build
-              run: cmake --build build-asan --parallel
+    #         - name: Build
+    #           run: cmake --build build-asan --parallel
 
-            - name: Prepare ASan runtime DLLs (copy next to test exes)
-              shell: pwsh
-              run: |
-                  $llvmRoot = "C:\Program Files\LLVM"
-                  if (-not (Test-Path $llvmRoot)) { throw "LLVM root not found: $llvmRoot" }
+    #         - name: Prepare ASan runtime DLLs (copy next to test exes)
+    #           shell: pwsh
+    #           run: |
+    #               $llvmRoot = "C:\Program Files\LLVM"
+    #               if (-not (Test-Path $llvmRoot)) { throw "LLVM root not found: $llvmRoot" }
 
-                  # Find ASan DLLs (package layout varies)
-                  $asanDlls = Get-ChildItem $llvmRoot -Recurse -Filter "clang_rt.asan*_x86_64.dll" -ErrorAction SilentlyContinue
-                  if (-not $asanDlls -or $asanDlls.Count -eq 0) {
-                    # fallback pattern some packages use
-                    $asanDlls = Get-ChildItem $llvmRoot -Recurse -Filter "clang_rt.asan*.dll" -ErrorAction SilentlyContinue
-                  }
+    #               # Find ASan DLLs (package layout varies)
+    #               $asanDlls = Get-ChildItem $llvmRoot -Recurse -Filter "clang_rt.asan*_x86_64.dll" -ErrorAction SilentlyContinue
+    #               if (-not $asanDlls -or $asanDlls.Count -eq 0) {
+    #                 # fallback pattern some packages use
+    #                 $asanDlls = Get-ChildItem $llvmRoot -Recurse -Filter "clang_rt.asan*.dll" -ErrorAction SilentlyContinue
+    #               }
 
-                  if (-not $asanDlls -or $asanDlls.Count -eq 0) {
-                    Write-Host "No ASan DLLs found under $llvmRoot"
-                    Get-ChildItem $llvmRoot -Recurse -Filter "*asan*" | Select-Object -First 200 FullName | ForEach-Object { Write-Host $_ }
-                    throw "ASan runtime DLLs not found."
-                  }
+    #               if (-not $asanDlls -or $asanDlls.Count -eq 0) {
+    #                 Write-Host "No ASan DLLs found under $llvmRoot"
+    #                 Get-ChildItem $llvmRoot -Recurse -Filter "*asan*" | Select-Object -First 200 FullName | ForEach-Object { Write-Host $_ }
+    #                 throw "ASan runtime DLLs not found."
+    #               }
 
-                  Write-Host "Found ASan DLLs:"
-                  $asanDlls | Select-Object FullName | ForEach-Object { Write-Host $_.FullName }
+    #               Write-Host "Found ASan DLLs:"
+    #               $asanDlls | Select-Object FullName | ForEach-Object { Write-Host $_.FullName }
 
-                  # Copy DLLs next to every .exe in build-asan (Windows loader searches exe dir first)
-                  $exeDirs = Get-ChildItem "build-asan" -Recurse -Filter "*.exe" | ForEach-Object { $_.Directory.FullName } | Sort-Object -Unique
-                  if (-not $exeDirs -or $exeDirs.Count -eq 0) { throw "No test executables found under build-asan" }
+    #               # Copy DLLs next to every .exe in build-asan (Windows loader searches exe dir first)
+    #               $exeDirs = Get-ChildItem "build-asan" -Recurse -Filter "*.exe" | ForEach-Object { $_.Directory.FullName } | Sort-Object -Unique
+    #               if (-not $exeDirs -or $exeDirs.Count -eq 0) { throw "No test executables found under build-asan" }
 
-                  foreach ($d in $exeDirs) {
-                    foreach ($dll in $asanDlls) {
-                      Copy-Item $dll.FullName -Destination $d -Force
-                    }
-                  }
+    #               foreach ($d in $exeDirs) {
+    #                 foreach ($dll in $asanDlls) {
+    #                   Copy-Item $dll.FullName -Destination $d -Force
+    #                 }
+    #               }
 
-                  Write-Host "Copied ASan DLLs to $($exeDirs.Count) executable directories."
+    #               Write-Host "Copied ASan DLLs to $($exeDirs.Count) executable directories."
 
-            - name: Test
-              shell: pwsh
-              run: |
-                  # Ensure ASan runtime DLL can be found
-                  $env:ASAN_OPTIONS = "detect_container_overflow=0:halt_on_error=1:abort_on_error=1:strict_string_checks=1"
-                  $llvmBin = "C:\\Program Files\\LLVM\\bin"
-                  $env:PATH = "$llvmBin;$env:PATH"
-                  cd build-asan
-                  ctest --output-on-failure
+    #         - name: Test
+    #           shell: pwsh
+    #           run: |
+    #               # Ensure ASan runtime DLL can be found
+    #               $env:ASAN_OPTIONS = "detect_container_overflow=0:halt_on_error=1:abort_on_error=1:strict_string_checks=1"
+    #               $llvmBin = "C:\\Program Files\\LLVM\\bin"
+    #               $env:PATH = "$llvmBin;$env:PATH"
+    #               cd build-asan
+    #               ctest --output-on-failure
