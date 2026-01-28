@@ -31,11 +31,11 @@ WORKDIR /opt/falcata
 COPY --from=build /build/ ./bin/
 
 # Config template + entrypoint
-COPY config/config.template.json ./config.template.json
+COPY config.template.json ./config.release.json
 COPY docker/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
-ENV FALCATA_CONFIG=/opt/falcata/config.json
+ENV FALCATA_CONFIG=/opt/falcata/config.release.json
 
 EXPOSE 8080
 
