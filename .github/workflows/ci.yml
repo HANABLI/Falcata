@@ -141,10 +141,22 @@ jobs:
                     throw "WebServer.exe not found in build outputs"
                   }
 
-                  # Copy plugins if they exist (adjust folder)
-                  if (Test-Path "WebServer\plugins") {
-                    Copy-Item "WebServer\plugins\*" "dist\plugins\" -Recurse -Force
+                  # Copy DLLs next to every .exe in build-asan (Windows loader searches exe dir first)
+                  $exeDirs = Get-ChildItem "build" -Recurse -Filter "*.exe" | ForEach-Object { $_.Directory.FullName } | Sort-Object -Unique
+                  if (-not $exeDirs -or $exeDirs.Count -eq 0) { throw "No executables found under build" }
+
+                  foreach ($d in $exeDirs) {
+                    foreach ($dll in $asanDlls) {
+                      Copy-Item $dll.FullName -Destination "dist\plugins\" -Force
+                    }
                   }
+
+                  Write-Host "Copied ASan DLLs to $($exeDirs.Count) executable directories."
+
+                  # # Copy plugins if they exist (adjust folder)
+                  # if (Test-Path "WebServer\plugins") {
+                  #   Copy-Item "WebServer\plugins\*" "dist\plugins\" -Recurse -Force
+                  # }
 
                   # Copy config example
                   if (Test-Path "config.prod.json") {
