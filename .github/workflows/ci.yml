@@ -155,7 +155,7 @@ jobs:
 
                   # Optional: include example config
                   if (Test-Path "config.json") {
-                    Copy-Item "config.release.json" "dist\config.template.json" -Force
+                    Copy-Item "config.release.json" "dist\config.release.json" -Force
                   }
 
                   Compress-Archive -Path dist\* -DestinationPath "Falcata-win64.zip" -Force

@@ -31,7 +31,7 @@ WORKDIR /opt/falcata
 COPY --from=build /build/ ./bin/
 
 # Config template + entrypoint
-COPY config.template.json ./config.release.json
+COPY config.release.json ./config.release.json
 COPY docker/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
