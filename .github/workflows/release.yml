@@ -108,11 +108,18 @@ jobs:
                     throw "Dockerfile.windows is missing. Add it at repo root to build a Windows container."
                   }
 
+                  $image = ("ghcr.io/${{ github.repository }}").ToLower()
+                  $tag   = "${{ github.ref_name }}"
+
                   docker version
 
-                  docker build -f Dockerfile.windows -t "$image:$tag-windows" -t "$image:windows-latest" .
-                  docker push "$image:$tag-windows"
-                  docker push "$image:windows-latest"
+                  docker build -f Dockerfile.windows `
+                    -t "${image}:${tag}-windows" `
+                    -t "${image}:windows-latest" `
+                    .
+
+                  docker push "${image}:${tag}-windows"
+                  docker push "${image}:windows-latest"
 
     deploy:
         name: Deploy on Docker machine (optional)
