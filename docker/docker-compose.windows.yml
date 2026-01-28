@@ -1,0 +1,26 @@
+services:
+    falcata:
+        image: ghcr.io/hanabli/falcata:windows-latest
+        container_name: falcata-webserver
+        restart: unless-stopped
+
+        # Windows containers: helps when your host supports process isolation
+        isolation: process
+
+        environment:
+            FALCATA_CONFIG: "C:\\opt\\falcata\\config\\config.prod.json"
+            # Optional: additional args
+            # FALCATA_ARGS: "--log-level debug"
+
+        ports:
+            - "8080:8080"
+
+        # Mount config (and optionally plugins/static content)
+        volumes:
+            - type: bind
+              source: .\config.prod.json
+              target: C:\opt\falcata\config\config.prod.json
+            # optional plugins override
+            # - type: bind
+            #   source: .\plugins
+            #   target: C:\opt\falcata\plugins

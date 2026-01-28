@@ -1,0 +1,31 @@
+# escape=`
+FROM mcr.microsoft.com/windows/servercore:ltsc2022
+
+SHELL ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+
+WORKDIR C:\opt\falcata
+
+# Copy your prebuilt Windows release payload (exe + dlls + plugins + config)
+# Expecting a build output layout like:
+#   dist/
+#     bin/WebServer.exe
+#     bin/*.dll
+#     plugins/*.dll
+#     config/config.prod.json
+COPY dist\ C:\opt\falcata\
+
+# Add entrypoint
+COPY entrypoint.ps1 C:\opt\falcata\entrypoint.ps1
+
+# Make sure paths exist
+RUN New-Item -ItemType Directory -Force C:\opt\falcata\bin, C:\opt\falcata\plugins, C:\opt\falcata\config | Out-Null
+
+# Default config path (can be overridden by env)
+ENV FALCATA_CONFIG="C:\opt\falcata\config\config.prod.json"
+ENV FALCATA_BIN="C:\opt\falcata\bin\WebServer.exe"
+
+# If your app uses plugins, keep them discoverable
+# You can also add bin/plugins folders to PATH
+ENV PATH="C:\opt\falcata\bin;C:\opt\falcata\plugins;%PATH%"
+
+ENTRYPOINT ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "C:\\opt\\falcata\\entrypoint.ps1"]
