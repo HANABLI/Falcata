@@ -124,39 +124,37 @@ jobs:
                   cd build
                   ctest --output-on-failure
 
-            - name: Package binaries (exe + dll/so)
+            - name: Package dist (robust)
               shell: pwsh
               run: |
-                  New-Item -ItemType Directory -Force -Path dist | Out-Null
+                  $ErrorActionPreference = "Stop"
 
-                  # Main server executable candidates (Windows + Linux styles)
-                  $exeCandidates = @(
-                    "build\WebServer.exe",
-                    "build\WebServer\WebServer.exe",
-                    "build\bin\WebServer.exe",
-                    "build\WebServer",
-                    "build\WebServer\WebServer",
-                    "build\bin\WebServer"
-                  )
+                  # Ensure directories
+                  New-Item -ItemType Directory -Force -Path "dist\bin","dist\plugins","dist\config" | Out-Null
 
-                  $exe = $exeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-                  if (-not $exe) { throw "WebServer binary not found in: $($exeCandidates -join ', ')" }
-
-                  Copy-Item $exe -Destination "dist\" -Force
-
-                  # Collect plugins/runtime libs
-                  $dlls = Get-ChildItem -Path "build" -Recurse -File -Filter "*.dll" -ErrorAction SilentlyContinue
-                  # $sos  = Get-ChildItem -Path "build" -Recurse -File -Filter "*.so"  -ErrorAction SilentlyContinue
-
-                  #foreach ($f in @($dlls + $sos)) {
-                  foreach ($f in @($dlls)) {
-                    Copy-Item $f.FullName -Destination "dist\plugins\" -Force
+                  # Copy exe (adjust if needed)
+                  if (Test-Path "build\WebServer.exe") {
+                    Copy-Item "build\WebServer.exe" "dist\bin\WebServer.exe" -Force
+                  } elseif (Test-Path "build\WebServer\WebServer.exe") {
+                    Copy-Item "build\WebServer\WebServer.exe" "dist\bin\WebServer.exe" -Force
+                  } else {
+                    throw "WebServer.exe not found in build outputs"
                   }
 
-                  # Optional: include example config
-                  if (Test-Path "config.json") {
-                    Copy-Item "config.release.json" "dist\config\config.prod.json" -Force
+                  # Copy plugins if they exist (adjust folder)
+                  if (Test-Path "WebServer\plugins") {
+                    Copy-Item "WebServer\plugins\*" "dist\plugins\" -Recurse -Force
                   }
+
+                  # Copy config example
+                  if (Test-Path "config.prod.json") {
+                    Copy-Item "config.prod.json" "dist\config\config.prod.json" -Force
+                  } elseif (Test-Path "config.json") {
+                    Copy-Item "config.json" "dist\config\config.prod.json" -Force
+                  }
+
+                  Write-Host "dist content:"
+                  Get-ChildItem dist -Recurse | Select-Object FullName, Length
 
                   Compress-Archive -Path dist\* -DestinationPath "Falcata-win64.zip" -Force
 
