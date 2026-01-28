@@ -3,8 +3,8 @@ name: CD Release (Windows)
 on:
     push:
         tags:
-            - "v*" # more reliable than v*.*.*
-    workflow_dispatch: # manual trigger for testing
+            - "v*"
+    workflow_dispatch:
 
 permissions:
     contents: write
@@ -20,7 +20,7 @@ jobs:
         runs-on: windows-2022
 
         steps:
-            # 1) Download the Windows artifact built by CI for the same commit as the tag
+            # 1) Download the Windows artifact produced by CI for the same commit as the tag
             - name: Download Windows artifact from CI (same commit)
               uses: dawidd6/action-download-artifact@v3
               with:
@@ -35,36 +35,58 @@ jobs:
               run: |
                   Get-ChildItem artifact -Recurse | Select-Object FullName, Length
 
-            # 2) Create GitHub Release + upload the Windows zip asset
+            # 2) Prepare a deterministic release zip (handles both: zip present OR raw files present)
+            - name: Build release zip (dist -> Falcata-<tag>-win64.zip)
+              shell: pwsh
+              run: |
+                  $tag = "${{ github.ref_name }}"
+
+                  New-Item -ItemType Directory -Force dist | Out-Null
+
+                  # Case A: CI artifact contains a zip (your CI usually uploads Falcata-win64.zip)
+                  $zip = Get-ChildItem artifact -Recurse -Filter *.zip -ErrorAction SilentlyContinue | Select-Object -First 1
+                  if ($zip) {
+                    Write-Host "Found zip in artifact: $($zip.FullName)"
+                    Expand-Archive -Path $zip.FullName -DestinationPath dist -Force
+                  }
+                  else {
+                    # Case B: CI artifact contains files directly (no zip) => copy them into dist
+                    Write-Host "No zip found in artifact/. Copying artifact content into dist/..."
+                    Copy-Item -Path "artifact\*" -Destination "dist\" -Recurse -Force
+                  }
+
+                  Write-Host "dist content:"
+                  Get-ChildItem dist -Recurse | Select-Object FullName, Length
+
+                  # Must contain WebServer.exe somewhere
+                  $exe = Get-ChildItem dist -Recurse -Filter WebServer.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+                  if (-not $exe) { throw "WebServer.exe not found inside dist/. Ensure CI artifact includes WebServer.exe (or zip containing it)." }
+
+                  # Normalize: ensure WebServer.exe at dist root (optional but convenient)
+                  if ($exe.FullName -ne (Join-Path (Resolve-Path dist) "WebServer.exe")) {
+                    Copy-Item $exe.FullName -Destination "dist\WebServer.exe" -Force
+                  }
+
+                  # Create final release zip
+                  $outZip = "Falcata-$tag-win64.zip"
+                  if (Test-Path $outZip) { Remove-Item $outZip -Force }
+                  Compress-Archive -Path "dist\*" -DestinationPath $outZip -Force
+                  Write-Host "Created: $outZip"
+
+            # 3) Create GitHub Release + upload the Windows zip asset
             - name: Create GitHub Release + upload asset
               uses: softprops/action-gh-release@v2
               with:
                   generate_release_notes: true
                   files: |
-                      artifact/**
+                      Falcata-${{ github.ref_name }}-win64.zip
 
-            # 3) Checkout repo (needed to build Docker image)
+            # 4) Checkout repo (needed for Docker build context)
             - name: Checkout repository
               uses: actions/checkout@v4
               with:
                   fetch-depth: 0
-
-            # 4) Prepare dist/ from artifact (zip -> dist)
-            - name: Extract artifact into dist/
-              shell: pwsh
-              run: |
-                  New-Item -ItemType Directory -Force dist | Out-Null
-
-                  $zip = Get-ChildItem artifact -Recurse -Filter *.zip | Select-Object -First 1
-                  if (-not $zip) { throw "No .zip found in artifact/. CI must upload a zip (e.g. Falcata-win64.zip)." }
-
-                  Expand-Archive -Path $zip.FullName -DestinationPath dist -Force
-
-                  Write-Host "dist content:"
-                  Get-ChildItem dist -Recurse | Select-Object FullName
-
-                  $exe = Get-ChildItem dist -Recurse -Filter WebServer.exe | Select-Object -First 1
-                  if (-not $exe) { throw "WebServer.exe not found inside dist/. Ensure CI zip contains WebServer.exe." }
+                  submodules: recursive
 
             # 5) Login to GHCR
             - name: Login to GHCR
@@ -74,7 +96,8 @@ jobs:
                   username: ${{ github.actor }}
                   password: ${{ secrets.GITHUB_TOKEN }}
 
-            # 6) Build + push Windows container image (from Dockerfile.windows)
+            # 6) Build + push Windows container image
+            # IMPORTANT: you need a Windows Dockerfile (example name: Dockerfile.windows)
             - name: Build & push Windows Docker image
               shell: pwsh
               run: |
@@ -82,8 +105,10 @@ jobs:
                   $tag   = "${{ github.ref_name }}"
 
                   if (-not (Test-Path "Dockerfile.windows")) {
-                    throw "Dockerfile.windows is missing. Add it at repo root (see template below)."
+                    throw "Dockerfile.windows is missing. Add it at repo root to build a Windows container."
                   }
+
+                  docker version
 
                   docker build -f Dockerfile.windows -t "$image:$tag-windows" -t "$image:windows-latest" .
                   docker push "$image:$tag-windows"
@@ -91,7 +116,7 @@ jobs:
 
     deploy:
         name: Deploy on Docker machine (optional)
-        runs-on: windows-2022
+        runs-on: ubuntu-22.04
         needs: windows-release
         if: ${{ vars.DEPLOY_HOST != '' }}
 
