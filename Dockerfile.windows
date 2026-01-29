@@ -28,4 +28,4 @@ ENV FALCATA_BIN="C:\opt\falcata\bin\WebServer.exe"
 # You can also add bin/plugins folders to PATH
 ENV PATH="C:\opt\falcata\bin;C:\opt\falcata\plugins;%PATH%"
 
-ENTRYPOINT ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "C:\\opt\\falcata\\entrypoint.ps1"]
+ENTRYPOINT ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "C:\\opt\\falcata\\docker\\entrypoint.ps1"]
