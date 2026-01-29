@@ -151,6 +151,28 @@ jobs:
                     throw "WebServer.exe not found under build/. (See exe list above). Check target name or output directory."
                   }
 
+                  $triplet = $env:VCPKG_TARGET_TRIPLET
+                  if (-not $triplet) { $triplet = "x64-windows" }
+
+                  $vcpkgRoot = $env:VCPKG_ROOT
+                  if (-not $vcpkgRoot) {
+                    # common fallback location on runners or your setup
+                    if (Test-Path "C:\vcpkg") { $vcpkgRoot = "C:\vcpkg" }
+                  }
+
+                  if ($vcpkgRoot) {
+                    $applocal = Join-Path $vcpkgRoot "sctripts\buildsystems\msbuild\applocal.ps1"
+                    $installedBin = join-Path $vcpkgRoot "installed\$triplet\bin"
+
+                    if (Test-Path $applocal -and (Test-Path $installedBin)) {
+                      Write-Host "Running applocal.ps1 to copy runtime DLLs..."
+                      & $applocal -targetBinary (Resolve-Path "dist\bin\WebServer.exe") -installedDir $installedBin -OutVariable out
+                      Write-Host $out
+                    } else {
+                      Write-Host "applocal.ps1 or installed bin folder not found. Falling back to manual copy"
+                    }
+                  }
+
                   $exeDir = $exe.Directory.FullName
                   Write-Host "WebServer.exe: $($exe.FullName)"
                   Write-Host "Exe directory: $exeDir"
