@@ -20,7 +20,14 @@ jobs:
         runs-on: windows-2022
 
         steps:
-            # 1) Download the Windows artifact produced by CI for the same commit as the tag
+            # 1) Checkout repo (needed for Docker build context)
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+                  submodules: recursive
+
+            # 2) Download the Windows artifact produced by CI for the same commit as the tag
             - name: Download Windows artifact from CI (same commit)
               uses: dawidd6/action-download-artifact@v3
               with:
@@ -35,7 +42,7 @@ jobs:
               run: |
                   Get-ChildItem artifact -Recurse | Select-Object FullName, Length
 
-            # 2) Prepare a deterministic release zip (handles both: zip present OR raw files present)
+            # 3) Prepare a deterministic release zip (handles both: zip present OR raw files present)
             - name: Build release zip (dist -> Falcata-<tag>-win64.zip)
               shell: pwsh
               run: |
@@ -73,20 +80,13 @@ jobs:
                   Compress-Archive -Path "dist\*" -DestinationPath $outZip -Force
                   Write-Host "Created: $outZip"
 
-            # 3) Create GitHub Release + upload the Windows zip asset
+            # 4) Create GitHub Release + upload the Windows zip asset
             - name: Create GitHub Release + upload asset
               uses: softprops/action-gh-release@v2
               with:
                   generate_release_notes: true
                   files: |
                       Falcata-${{ github.ref_name }}-win64.zip
-
-            # 4) Checkout repo (needed for Docker build context)
-            - name: Checkout repository
-              uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
-                  submodules: recursive
 
             # 5) Login to GHCR
             - name: Login to GHCR
@@ -121,21 +121,26 @@ jobs:
                   docker push "${image}:${tag}-windows"
                   docker push "${image}:windows-latest"
 
-    deploy:
-        name: Deploy on Docker machine (optional)
-        runs-on: ubuntu-22.04
-        needs: windows-release
-        if: ${{ vars.DEPLOY_HOST != '' }}
-
-        steps:
             - name: Deploy via SSH (docker compose pull + up)
-              uses: appleboy/ssh-action@v1.0.3
-              with:
-                  host: ${{ vars.DEPLOY_HOST }}
-                  username: ${{ secrets.DEPLOY_USER }}
-                  key: ${{ secrets.DEPLOY_SSH_KEY }}
-                  script: |
-                      set -e
-                      cd "${{ vars.DEPLOY_PATH }}"
-                      docker compose pull
-                      docker compose up -d --remove-orphans
+              if: ${{ vars.DEPLOY_HOST != '' }}
+              shell: pwsh
+              env:
+                  DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+                  DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+                  DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+                  DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+              run: |
+                  $ErrorActionPreference = "Stop"
+
+                  $keyPath = Join-Path $env:RUNNER_TEMP "deploy_key"
+                  Set-Content -Path $keyPath -Value $env:DEPLOY_SSH_KEY -NoNewline
+
+                  # Lock down key permissions (Windows)
+                  icacls $keyPath /inheritance:r | Out-Null
+                  icacls $keyPath /grant:r "$($env:USERNAME):(R)" | Out-Null
+
+                  $host = $env:DEPLOY_HOST
+                  $user = $env:DEPLOY_USER
+                  $path = $env:DEPLOY_PATH
+
+                  ssh -o StrictHostKeyChecking=no -i $keyPath "$user@$host" "cd `"$path`" && docker compose pull && docker compose up -d --remove-orphans"
