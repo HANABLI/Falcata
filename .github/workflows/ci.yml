@@ -156,7 +156,7 @@ jobs:
                   Write-Host "Exe directory: $exeDir"
 
                   # Copy exe + dlls next to it
-                  Copy-Item -LiteralPath $exe.FullName -Distination "dist\bin\WebServer.exe" -Force
+                  Copy-Item -LiteralPath $exe.FullName -Destination "dist\bin\WebServer.exe" -Force
                   Get-ChildItem -Path $exeDir -Filter "*.dll" -ErrorAction SilentlyContinue | ForEach-Object
                   { Copy-Item -LiteralPath $_.FullName -Destination "dist\bin\" -Force }
 
