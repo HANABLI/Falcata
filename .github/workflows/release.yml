@@ -17,6 +17,7 @@ concurrency:
 jobs:
     windows-release:
         name: Release (download CI artifact + GitHub Release + Windows Docker)
+        environment: secrets
         runs-on: windows-2022
 
         steps:
