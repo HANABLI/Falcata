@@ -140,8 +140,8 @@ jobs:
                   icacls $keyPath /inheritance:r | Out-Null
                   icacls $keyPath /grant:r "$($env:USERNAME):(R)" | Out-Null
 
-                  $host = $env:DEPLOY_HOST
-                  $user = $env:DEPLOY_USER
-                  $path = $env:DEPLOY_PATH
+                  $depHost = $env:DEPLOY_HOST
+                  $depUser = $env:DEPLOY_USER
+                  $depPath = $env:DEPLOY_PATH
 
-                  ssh -o StrictHostKeyChecking=no -i $keyPath "$user@$host" "cd `"$path`" && docker compose pull && docker compose up -d --remove-orphans"
+                  ssh -o StrictHostKeyChecking=no -i $keyPath "$depUser@$depHost" "cd `"$depPath`" && docker compose pull && docker compose up -d --remove-orphans"
