@@ -164,7 +164,7 @@ jobs:
                     $applocal = Join-Path $vcpkgRoot "sctripts\buildsystems\msbuild\applocal.ps1"
                     $installedBin = join-Path $vcpkgRoot "installed\$triplet\bin"
 
-                    if (Test-Path $applocal -and (Test-Path $installedBin)) {
+                    if ((Test-Path $applocal) -and (Test-Path $installedBin)) {
                       Write-Host "Running applocal.ps1 to copy runtime DLLs..."
                       & $applocal -targetBinary (Resolve-Path "dist\bin\WebServer.exe") -installedDir $installedBin -OutVariable out
                       Write-Host $out
