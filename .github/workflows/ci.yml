@@ -132,33 +132,39 @@ jobs:
                   # Ensure directories
                   New-Item -ItemType Directory -Force -Path "dist\bin","dist\plugins","dist\config" | Out-Null
 
-                  # Copy exe (adjust if needed)
-                  if (Test-Path "build\WebServer.exe") {
-                    Copy-Item "build\WebServer.exe" "dist\bin\WebServer.exe" -Force
-                  } elseif (Test-Path "build\WebServer\WebServer.exe") {
-                    Copy-Item "build\WebServer\WebServer.exe" "dist\bin\WebServer.exe" -Force
+                  # ---- 1) Locate WebServer.exe ----
+                  $exe = Get-ChildItem -Path "build" -Recurse -Filter "WebServer.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+                  if (-not $exe) { throw "WebServer.exe" not found under build/. }
+
+                  $exeDir = $exe.Directory.FullName
+                  Write-Host "WebServer.exe: $($exe.FullName)"
+                  Write-Host "Exe directory: $exeDir"
+
+                  # Copy exe + dlls next to it
+                  Copy-Item -LiteralPath $exe.FullName -Distination "dist\bin\WebServer.exe" -Force
+                  Get-ChildItem -Path $exeDir -Filter "*.dll" -ErrorAction SilentlyContinue | ForEach-Object
+                  { Copy-Item -LiteralPath $_.FullName -Destination "dist\bin\" -Force }
+
+                  # ---- 2) Copy plugin DLLs into dist\plugins ----
+                  # Heuristic: any DLL with "Plugin" in its name
+                  $pluginDlls = Get-childItem -Path "build" -Recurse -Filter "*Plugin*.dll" -ErrorAction SilentlyContinue
+
+                  if (-not $pluginDlls -or $pluginDlls.Count -eq 0) {
+                    Write-Host "WARN: No *Plugin*.dll found under build/. Adjuste the filter if your dlls are named differently"
                   } else {
-                    throw "WebServer.exe not found in build outputs"
-                  }
+                    foreach ($p in $pluginDlls) {
+                      Write-Host "Plugin: $($p.FullName)"
+                      Copy-Item -LiteralPath $p.FullName -Destination "dist\plugins\" -Force
 
-                  # Copy DLLs next to every .exe in build-asan (Windows loader searches exe dir first)
-                  $exeDirs = Get-ChildItem "build" -Recurse -Filter "*.exe" | ForEach-Object { $_.Directory.FullName } | Sort-Object -Unique
-                  if (-not $exeDirs -or $exeDirs.Count -eq 0) { throw "No executables found under build" }
-
-                  foreach ($d in $exeDirs) {
-                    foreach ($dll in $asanDlls) {
-                      Copy-Item $dll.FullName -Destination "dist\plugins\" -Force
+                      # Also copy DLLs that live next to the plugin (commun runtime deps)
+                      $pdir = $p.Directory.FullName
+                      Get-ChildItem -Path $pdir -Filter "*.dll" -ErrorAction SilentlyContinue |
+                        Where-Object { $_.FullName -ne $p.FullName } |
+                        ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination "dist\plugins\" -Force }
                     }
                   }
 
-                  Write-Host "Copied ASan DLLs to $($exeDirs.Count) executable directories."
-
-                  # # Copy plugins if they exist (adjust folder)
-                  # if (Test-Path "WebServer\plugins") {
-                  #   Copy-Item "WebServer\plugins\*" "dist\plugins\" -Recurse -Force
-                  # }
-
-                  # Copy config example
+                  # ---- 3) Copy config example -----
                   if (Test-Path "config.prod.json") {
                     Copy-Item "config.prod.json" "dist\config\config.prod.json" -Force
                   } elseif (Test-Path "config.json") {
