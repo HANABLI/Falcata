@@ -157,8 +157,9 @@ jobs:
 
                   # Copy exe + dlls next to it
                   Copy-Item -LiteralPath $exe.FullName -Destination "dist\bin\WebServer.exe" -Force
-                  Get-ChildItem -Path $exeDir -Filter "*.dll" -ErrorAction SilentlyContinue | ForEach-Object
-                  { Copy-Item -LiteralPath $_.FullName -Destination "dist\bin\" -Force }
+                  Get-ChildItem -Path $exeDir -Filter "*.dll" -ErrorAction SilentlyContinue | ForEach-Object {
+                    Copy-Item -LiteralPath $_.FullName -Destination "dist\bin\" -Force
+                  }
 
                   # ---- 2) Copy plugin DLLs into dist\plugins ----
                   # Heuristic: any DLL with "Plugin" in its name
