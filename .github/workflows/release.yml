@@ -122,26 +122,58 @@ jobs:
                   docker push "${image}:${tag}-windows"
                   docker push "${image}:windows-latest"
 
-            - name: Deploy via SSH (docker compose pull + up)
-              if: ${{ vars.DEPLOY_HOST != '' }}
+    deploy:
+        name: Deploy on self-hosted Windows runner
+        runs-on: self-hosted
+        environment: secrets
+        needs: windows-release
+
+        steps:
+            - name: Login to GHCR (for pulls)
               shell: pwsh
-              env:
-                  DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
-                  DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
-                  DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-                  DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+              run: |
+                  echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+            - name: Pull & restart (docker compose)
+              shell: pwsh
               run: |
                   $ErrorActionPreference = "Stop"
 
-                  $keyPath = Join-Path $env:RUNNER_TEMP "deploy_key"
-                  Set-Content -Path $keyPath -Value $env:DEPLOY_SSH_KEY -NoNewline
+                  $img = ("ghcr.io/${{ github.repository }}").ToLower()
+                  $tag = "${{ github.ref_name }}"
 
-                  # Lock down key permissions (Windows)
-                  icacls $keyPath /inheritance:r | Out-Null
-                  icacls $keyPath /grant:r "$($env:USERNAME):(R)" | Out-Null
+                  # Pull the exact tag (recommended)
+                  docker pull "${img}:${tag}-windows"
 
-                  $depHost = $env:DEPLOY_HOST
-                  $depUser = $env:DEPLOY_USER
-                  $depPath = $env:DEPLOY_PATH
+                  # Optional: update "windows-latest" too (if you use it)
+                  docker pull "${img}:windows-latest"
 
-                  ssh -o StrictHostKeyChecking=no -i $keyPath "$depUser@$depHost" "cd `"$depPath`" && docker compose pull && docker compose up -d --remove-orphans"
+                  cd "${{ vars.DEPLOY_PATH }}"
+
+                  docker compose -f docker-compose.windows.yml up -d --remove-orphans
+                  docker ps
+
+
+                  # - name: Deploy via SSH (docker compose pull + up)
+                  #   if: ${{ vars.DEPLOY_HOST != '' }}
+                  #   shell: pwsh
+                  #   env:
+                  #       DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+                  #       DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+                  #       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+                  #       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+                  #   run: |
+                  #       $ErrorActionPreference = "Stop"
+
+                  #       $keyPath = Join-Path $env:RUNNER_TEMP "deploy_key"
+                  #       Set-Content -Path $keyPath -Value $env:DEPLOY_SSH_KEY -NoNewline
+
+                  #       # Lock down key permissions (Windows)
+                  #       icacls $keyPath /inheritance:r | Out-Null
+                  #       icacls $keyPath /grant:r "$($env:USERNAME):(R)" | Out-Null
+
+                  #       $depHost = $env:DEPLOY_HOST
+                  #       $depUser = $env:DEPLOY_USER
+                  #       $depPath = $env:DEPLOY_PATH
+
+                  #       ssh -o StrictHostKeyChecking=no -i $keyPath "$depUser@$depHost" "cd `"$depPath`" && docker compose pull && docker compose up -d --remove-orphans"
