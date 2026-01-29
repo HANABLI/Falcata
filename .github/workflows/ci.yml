@@ -113,7 +113,7 @@ jobs:
               shell: pwsh
               run: |
                   $tc = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
-                  cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug `
+                  cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release `
                     -DCMAKE_TOOLCHAIN_FILE="$tc"
 
             - name: Build
@@ -132,17 +132,24 @@ jobs:
                   # Ensure directories
                   New-Item -ItemType Directory -Force -Path "dist\bin","dist\plugins","dist\config" | Out-Null
 
-                  # ---- 1) Locate WebServer.exe ----
-                  # ---- Locate WebServer.exe ----
-                  $exeCandidates = @(
-                    "build\WebServer.exe",
-                    "build\WebServer\WebServer.exe",
-                    "build\bin\WebServer.exe",
-                    "build\WebServer\bin\WebServer.exe"
-                  )
+                  Write-Host "=== Listing build tree (top) ==="
+                  if (Test-Path "build") {
+                    Get-ChildItem build -Force | Select-Object Name, FullName
+                  } else {
+                    Write-Host "build folder not found. Current directory:"
+                    Get-ChildItem . -Force | Select-Object Name, FullName
+                    throw "build folder not found. Ensure you configured with: cmake -S . -B build ..."
+                  }
 
-                  $exe = $exeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-                  if (-not $exePath) { throw "WebServer.exe not found under build/. Checked: $($exeCandidates -join ', ')" }
+                  Write-Host "=== Searching for WebServer.exe under build/ ==="
+                  $exe = Get-ChildItem -Path "build" -Recurse -File -Filter "WebServer.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+                  if (-not $exe) {
+                    Write-Host "WebServer.exe not found. Searching for any .exe produced..."
+                    Get-ChildItem -Path "build" -Recurse -File -Filter "*.exe" -ErrorAction SilentlyContinue |
+                      Select-Object FullName, Length | Sort-Object FullName | Format-Table -AutoSize
+
+                    throw "WebServer.exe not found under build/. (See exe list above). Check target name or output directory."
+                  }
 
                   $exeDir = $exe.Directory.FullName
                   Write-Host "WebServer.exe: $($exe.FullName)"
