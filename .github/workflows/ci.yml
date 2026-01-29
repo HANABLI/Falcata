@@ -133,8 +133,16 @@ jobs:
                   New-Item -ItemType Directory -Force -Path "dist\bin","dist\plugins","dist\config" | Out-Null
 
                   # ---- 1) Locate WebServer.exe ----
-                  $exe = Get-ChildItem -Path "build" -Recurse -Filter "WebServer.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-                  if (-not $exe) { throw "WebServer.exe" not found under build/. }
+                  # ---- Locate WebServer.exe ----
+                  $exeCandidates = @(
+                    "build\WebServer.exe",
+                    "build\WebServer\WebServer.exe",
+                    "build\bin\WebServer.exe",
+                    "build\WebServer\bin\WebServer.exe"
+                  )
+
+                  $exe = $exeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+                  if (-not $exePath) { throw "WebServer.exe not found under build/. Checked: $($exeCandidates -join ', ')" }
 
                   $exeDir = $exe.Directory.FullName
                   Write-Host "WebServer.exe: $($exe.FullName)"
@@ -147,20 +155,13 @@ jobs:
 
                   # ---- 2) Copy plugin DLLs into dist\plugins ----
                   # Heuristic: any DLL with "Plugin" in its name
-                  $pluginDlls = Get-childItem -Path "build" -Recurse -Filter "*Plugin*.dll" -ErrorAction SilentlyContinue
-
-                  if (-not $pluginDlls -or $pluginDlls.Count -eq 0) {
-                    Write-Host "WARN: No *Plugin*.dll found under build/. Adjuste the filter if your dlls are named differently"
-                  } else {
-                    foreach ($p in $pluginDlls) {
-                      Write-Host "Plugin: $($p.FullName)"
-                      Copy-Item -LiteralPath $p.FullName -Destination "dist\plugins\" -Force
-
-                      # Also copy DLLs that live next to the plugin (commun runtime deps)
-                      $pdir = $p.Directory.FullName
-                      Get-ChildItem -Path $pdir -Filter "*.dll" -ErrorAction SilentlyContinue |
-                        Where-Object { $_.FullName -ne $p.FullName } |
-                        ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination "dist\plugins\" -Force }
+                  $searchRoots = @("build")
+                  foreach ($root in $searchRoots) {
+                    if (Test-Path $root) {
+                      Get-ChildItem -Path $root -Recurse -File -Filter *Plugin*.dll -ErrorAction SilentlyContinue |
+                        ForEach-Object {
+                          Copy-Item -LiteralPath $_.FullName -Destination "dist\plugins\" -Force
+                        }
                     }
                   }
 
