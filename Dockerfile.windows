@@ -15,7 +15,7 @@ WORKDIR C:\opt\falcata
 COPY dist\ C:\opt\falcata\
 
 # Add entrypoint
-COPY entrypoint.ps1 C:\opt\falcata\entrypoint.ps1
+COPY docker\entrypoint.ps1 C:\opt\falcata\entrypoint.ps1
 
 # Make sure paths exist
 RUN New-Item -ItemType Directory -Force C:\opt\falcata\bin, C:\opt\falcata\plugins, C:\opt\falcata\config | Out-Null
@@ -28,4 +28,4 @@ ENV FALCATA_BIN="C:\opt\falcata\bin\WebServer.exe"
 # You can also add bin/plugins folders to PATH
 ENV PATH="C:\opt\falcata\bin;C:\opt\falcata\plugins;%PATH%"
 
-ENTRYPOINT ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "C:\\opt\\falcata\\docker\\entrypoint.ps1"]
+ENTRYPOINT ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "C:\\opt\\falcata\\entrypoint.ps1"]
