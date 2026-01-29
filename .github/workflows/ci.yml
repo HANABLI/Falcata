@@ -151,27 +151,21 @@ jobs:
                     throw "WebServer.exe not found under build/. (See exe list above). Check target name or output directory."
                   }
 
-                  $triplet = $env:VCPKG_TARGET_TRIPLET
-                  if (-not $triplet) { $triplet = "x64-windows" }
+                  $vcpkgRoot = "C:\vcpkg"
+                  $triplet   = "x64-windows"
+                  $installedBin = Join-Path $vcpkgRoot "installed\$triplet\bin"
+                  if (-not (Test-Path $installedBin)) { throw "vcpkg installed bin not found: $installedBin" }
 
-                  $vcpkgRoot = $env:VCPKG_ROOT
-                  if (-not $vcpkgRoot) {
-                    # common fallback location on runners or your setup
-                    if (Test-Path "C:\vcpkg") { $vcpkgRoot = "C:\vcpkg" }
+                  # safest: copy all runtime dlls from vcpkg bin
+                  Get-ChildItem -Path $installedBin -Filter "*.dll" -File | ForEach-Object {
+                    Copy-Item -LiteralPath $_.FullName -Destination "dist\bin" -Force
                   }
 
-                  if ($vcpkgRoot) {
-                    $applocal = Join-Path $vcpkgRoot "sctripts\buildsystems\msbuild\applocal.ps1"
-                    $installedBin = join-Path $vcpkgRoot "installed\$triplet\bin"
-
-                    if ((Test-Path $applocal) -and (Test-Path $installedBin)) {
-                      Write-Host "Running applocal.ps1 to copy runtime DLLs..."
-                      & $applocal -targetBinary (Resolve-Path "dist\bin\WebServer.exe") -installedDir $installedBin -OutVariable out
-                      Write-Host $out
-                    } else {
-                      Write-Host "applocal.ps1 or installed bin folder not found. Falling back to manual copy"
-                    }
+                  # Also copy DLLs next to the exe output dir (if CMake produced any)
+                  Get-ChildItem -Path $exe.Directory.FullName -Filter "*.dll" -File -ErrorAction SilentlyContinue | ForEach-Object {
+                    Copy-Item -LiteralPath $_.FullName -Destination "dist\bin" -Force
                   }
+
 
                   $exeDir = $exe.Directory.FullName
                   Write-Host "WebServer.exe: $($exe.FullName)"
