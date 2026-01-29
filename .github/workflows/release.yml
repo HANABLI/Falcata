@@ -124,7 +124,7 @@ jobs:
 
     deploy:
         name: Deploy on self-hosted Windows runner
-        runs-on: self-hosted
+        runs-on: [self-hosted, windows, x64, azure-prod]
         environment: secrets
         needs: windows-release
 
@@ -155,27 +155,26 @@ jobs:
                   docker compose -f docker-compose.windows.yml up -d --remove-orphans
                   docker ps
 
+              # - name: Deploy via SSH (docker compose pull + up)
+              #   if: ${{ vars.DEPLOY_HOST != '' }}
+              #   shell: pwsh
+              #   env:
+              #       DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+              #       DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+              #       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+              #       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+              #   run: |
+              #       $ErrorActionPreference = "Stop"
 
-                  # - name: Deploy via SSH (docker compose pull + up)
-                  #   if: ${{ vars.DEPLOY_HOST != '' }}
-                  #   shell: pwsh
-                  #   env:
-                  #       DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
-                  #       DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
-                  #       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-                  #       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-                  #   run: |
-                  #       $ErrorActionPreference = "Stop"
+              #       $keyPath = Join-Path $env:RUNNER_TEMP "deploy_key"
+              #       Set-Content -Path $keyPath -Value $env:DEPLOY_SSH_KEY -NoNewline
 
-                  #       $keyPath = Join-Path $env:RUNNER_TEMP "deploy_key"
-                  #       Set-Content -Path $keyPath -Value $env:DEPLOY_SSH_KEY -NoNewline
+              #       # Lock down key permissions (Windows)
+              #       icacls $keyPath /inheritance:r | Out-Null
+              #       icacls $keyPath /grant:r "$($env:USERNAME):(R)" | Out-Null
 
-                  #       # Lock down key permissions (Windows)
-                  #       icacls $keyPath /inheritance:r | Out-Null
-                  #       icacls $keyPath /grant:r "$($env:USERNAME):(R)" | Out-Null
+              #       $depHost = $env:DEPLOY_HOST
+              #       $depUser = $env:DEPLOY_USER
+              #       $depPath = $env:DEPLOY_PATH
 
-                  #       $depHost = $env:DEPLOY_HOST
-                  #       $depUser = $env:DEPLOY_USER
-                  #       $depPath = $env:DEPLOY_PATH
-
-                  #       ssh -o StrictHostKeyChecking=no -i $keyPath "$depUser@$depHost" "cd `"$depPath`" && docker compose pull && docker compose up -d --remove-orphans"
+              #       ssh -o StrictHostKeyChecking=no -i $keyPath "$depUser@$depHost" "cd `"$depPath`" && docker compose pull && docker compose up -d --remove-orphans"
