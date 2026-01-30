@@ -137,7 +137,7 @@ jobs:
                   password: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Pull & restart (docker compose)
-              shell: pwsh
+              shell: powershell
               run: |
                   $ErrorActionPreference = "Stop"
 
