@@ -4,23 +4,31 @@ services:
         container_name: falcata-webserver
         restart: unless-stopped
 
-        # Windows containers: helps when your host supports process isolation
-        isolation: process
-
-        environment:
-            FALCATA_CONFIG: "C:\\opt\\falcata\\config\\config.prod.json"
-            # Optional: additional args
-            # FALCATA_ARGS: "--log-level debug"
-
         ports:
             - "8080:8080"
 
-        # Mount config (and optionally plugins/static content)
+        environment:
+            # secrets via .env (sur la machine de déploiement)
+            JWT_SECRET: "${JWT_SECRET}"
+
+            # IMPORTANT: mets ici l’IP/hostname de TON postgres (externe)
+            # exemple Azure: host=mydb.postgres.database.azure.com port=5432 dbname=iot user=... password=...
+            PG_CONNINFO: "${PG_CONNINFO}"
+
+            # chemins Windows DANS le container
+            PLUGINS_DIR: "C:\\opt\\falcata\\plugins"
+            PLUGINS_RUNTIME_DIR: "C:\\opt\\falcata\\plugins\\runtime"
+            FALCATA_CONFIG: "C:\\opt\\falcata\\config\\config.prod.json"
+
         volumes:
+            # le fichier config sur la machine hôte (dans C:\opt\falcata\config\config.prod.json)
             - type: bind
-              source: .\config.prod.json
+              source: .\config\config.prod.json
               target: C:\opt\falcata\config\config.prod.json
-            # optional plugins override
+
+            # optionnel: override plugins depuis l’hôte
             # - type: bind
             #   source: .\plugins
             #   target: C:\opt\falcata\plugins
+
+        isolation: process

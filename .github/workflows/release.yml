@@ -100,6 +100,26 @@ jobs:
                 shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "{0}"
 
         steps:
+            - name: Prepare runtime files (.env, compose, config)
+              shell: cmd
+              env:
+                  DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+                  JWT_SECRET: ${{ secrets.JWT_SECRET }}
+                  PG_CONNINFO: ${{ secrets.PG_CONNINFO }}
+              run: |
+                  if not exist "%DEPLOY_PATH%" mkdir "%DEPLOY_PATH%"
+                  if not exist "%DEPLOY_PATH%\config" mkdir "%DEPLOY_PATH%\config"
+
+                  rem --- write .env ---
+                  > "%DEPLOY_PATH%\.env" echo JWT_SECRET=%JWT_SECRET%
+                  >> "%DEPLOY_PATH%\.env" echo PG_CONNINFO=%PG_CONNINFO%
+
+                  if not exist "%DEPLOY_PATH%" mkdir "%DEPLOY_PATH%"
+                  if not exist "%DEPLOY_PATH%\config" mkdir "%DEPLOY_PATH%\config"
+
+                  copy /Y "%GITHUB_WORKSPACE%\docker-compose.windows.yml" "%DEPLOY_PATH%\docker-compose.windows.yml"
+                  copy /Y "%GITHUB_WORKSPACE%\config\config.prod.json" "%DEPLOY_PATH%\config\config.prod.json"
+
             - name: Pull & restart (docker compose)
               run: |
                   $ErrorActionPreference = "Stop"
