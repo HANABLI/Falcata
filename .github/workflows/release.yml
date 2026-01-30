@@ -16,19 +16,16 @@ concurrency:
 
 jobs:
     windows-release:
-        name: Release (download CI artifact + GitHub Release + Windows Docker)
-        environment: secrets
+        name: Build Release + GH Release + Windows Docker
         runs-on: windows-2022
 
         steps:
-            # 1) Checkout repo (needed for Docker build context)
-            - name: Checkout repository
+            - name: Checkout repository (needed for Docker build context)
               uses: actions/checkout@v4
               with:
                   fetch-depth: 0
                   submodules: recursive
 
-            # 2) Download the Windows artifact produced by CI for the same commit as the tag
             - name: Download Windows artifact from CI (same commit)
               uses: dawidd6/action-download-artifact@v3
               with:
@@ -38,58 +35,31 @@ jobs:
                   path: artifact
                   if_no_artifact_found: fail
 
-            - name: Show downloaded files
+            - name: Extract artifact zip into dist/
               shell: pwsh
               run: |
-                  Get-ChildItem artifact -Recurse | Select-Object FullName, Length
-
-            # 3) Prepare a deterministic release zip (handles both: zip present OR raw files present)
-            - name: Build release zip (dist -> Falcata-<tag>-win64.zip)
-              shell: pwsh
-              run: |
-                  $tag = "${{ github.ref_name }}"
+                  $ErrorActionPreference = "Stop"
 
                   New-Item -ItemType Directory -Force dist | Out-Null
 
-                  # Case A: CI artifact contains a zip (your CI usually uploads Falcata-win64.zip)
                   $zip = Get-ChildItem artifact -Recurse -Filter *.zip -ErrorAction SilentlyContinue | Select-Object -First 1
-                  if ($zip) {
-                    Write-Host "Found zip in artifact: $($zip.FullName)"
-                    Expand-Archive -Path $zip.FullName -DestinationPath dist -Force
-                  }
-                  else {
-                    # Case B: CI artifact contains files directly (no zip) => copy them into dist
-                    Write-Host "No zip found in artifact/. Copying artifact content into dist/..."
-                    Copy-Item -Path "artifact\*" -Destination "dist\" -Recurse -Force
-                  }
+                  if (-not $zip) { throw "No .zip found in artifact/. CI must upload a zip (e.g. Falcata-win64.zip)." }
+
+                  Expand-Archive -Path $zip.FullName -DestinationPath dist -Force
 
                   Write-Host "dist content:"
                   Get-ChildItem dist -Recurse | Select-Object FullName, Length
 
-                  # Must contain WebServer.exe somewhere
                   $exe = Get-ChildItem dist -Recurse -Filter WebServer.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-                  if (-not $exe) { throw "WebServer.exe not found inside dist/. Ensure CI artifact includes WebServer.exe (or zip containing it)." }
+                  if (-not $exe) { throw "WebServer.exe not found inside dist/. Ensure CI zip contains WebServer.exe." }
 
-                  # Normalize: ensure WebServer.exe at dist root (optional but convenient)
-                  if ($exe.FullName -ne (Join-Path (Resolve-Path dist) "WebServer.exe")) {
-                    Copy-Item $exe.FullName -Destination "dist\WebServer.exe" -Force
-                  }
-
-                  # Create final release zip
-                  $outZip = "Falcata-$tag-win64.zip"
-                  if (Test-Path $outZip) { Remove-Item $outZip -Force }
-                  Compress-Archive -Path "dist\*" -DestinationPath $outZip -Force
-                  Write-Host "Created: $outZip"
-
-            # 4) Create GitHub Release + upload the Windows zip asset
-            - name: Create GitHub Release + upload asset
+            - name: Create GitHub Release + upload zip asset
               uses: softprops/action-gh-release@v2
               with:
                   generate_release_notes: true
                   files: |
-                      Falcata-${{ github.ref_name }}-win64.zip
+                      artifact/**
 
-            # 5) Login to GHCR
             - name: Login to GHCR
               uses: docker/login-action@v3
               with:
@@ -97,20 +67,17 @@ jobs:
                   username: ${{ github.actor }}
                   password: ${{ secrets.GITHUB_TOKEN }}
 
-            # 6) Build + push Windows container image
-            # IMPORTANT: you need a Windows Dockerfile (example name: Dockerfile.windows)
             - name: Build & push Windows Docker image
               shell: pwsh
               run: |
+                  $ErrorActionPreference = "Stop"
+
                   $image = ("ghcr.io/${{ github.repository }}").ToLower()
                   $tag   = "${{ github.ref_name }}"
 
                   if (-not (Test-Path "Dockerfile.windows")) {
-                    throw "Dockerfile.windows is missing. Add it at repo root to build a Windows container."
+                    throw "Dockerfile.windows is missing at repo root."
                   }
-
-                  $image = ("ghcr.io/${{ github.repository }}").ToLower()
-                  $tag   = "${{ github.ref_name }}"
 
                   docker version
 
@@ -124,57 +91,36 @@ jobs:
 
     deploy:
         name: Deploy on self-hosted Windows runner
-        runs-on: [self-hosted, windows, x64, azure-prod]
-        environment: secrets
         needs: windows-release
+        runs-on: [self-hosted, windows, x64, azure-prod]
+
+        # IMPORTANT: bypass ExecutionPolicy + avoid pwsh dependency
+        defaults:
+            run:
+                shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "{0}"
 
         steps:
-            - name: Login to GHCR
-              uses: docker/login-action@v3
-              with:
-                  registry: ghcr.io
-                  username: ${{ github.actor }}
-                  password: ${{ secrets.GITHUB_TOKEN }}
-
             - name: Pull & restart (docker compose)
-              shell: powershell
               run: |
                   $ErrorActionPreference = "Stop"
 
                   $img = ("ghcr.io/${{ github.repository }}").ToLower()
                   $tag = "${{ github.ref_name }}"
 
-                  # Pull the exact tag (recommended)
-                  docker pull "${img}:${tag}-windows"
+                  # Always pull the exact image for the tag
+                  docker pull "$img:$tag-windows"
 
-                  # Optional: update "windows-latest" too (if you use it)
-                  docker pull "${img}:windows-latest"
+                  # Optional
+                  docker pull "$img:windows-latest" | Out-Null
 
-                  cd "${{ vars.DEPLOY_PATH }}"
+                  # Your docker-compose.windows.yml lives on the target machine at DEPLOY_PATH
+                  $deployPath = "${{ vars.DEPLOY_PATH }}"
+                  if (-not (Test-Path $deployPath)) { throw "DEPLOY_PATH not found: $deployPath" }
+
+                  Set-Location $deployPath
+
+                  # Force compose to use the exact image for this tag
+                  $env:FALCATA_IMAGE = "$img:$tag-windows"
 
                   docker compose -f docker-compose.windows.yml up -d --remove-orphans
                   docker ps
-
-              # - name: Deploy via SSH (docker compose pull + up)
-              #   if: ${{ vars.DEPLOY_HOST != '' }}
-              #   shell: pwsh
-              #   env:
-              #       DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
-              #       DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
-              #       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-              #       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-              #   run: |
-              #       $ErrorActionPreference = "Stop"
-
-              #       $keyPath = Join-Path $env:RUNNER_TEMP "deploy_key"
-              #       Set-Content -Path $keyPath -Value $env:DEPLOY_SSH_KEY -NoNewline
-
-              #       # Lock down key permissions (Windows)
-              #       icacls $keyPath /inheritance:r | Out-Null
-              #       icacls $keyPath /grant:r "$($env:USERNAME):(R)" | Out-Null
-
-              #       $depHost = $env:DEPLOY_HOST
-              #       $depUser = $env:DEPLOY_USER
-              #       $depPath = $env:DEPLOY_PATH
-
-              #       ssh -o StrictHostKeyChecking=no -i $keyPath "$depUser@$depHost" "cd `"$depPath`" && docker compose pull && docker compose up -d --remove-orphans"
