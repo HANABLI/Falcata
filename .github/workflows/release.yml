@@ -83,11 +83,9 @@ jobs:
 
                   docker build -f Dockerfile.windows `
                     -t "${image}:${tag}-windows" `
-                    -t "${image}:windows-latest" `
                     .
 
                   docker push "${image}:${tag}-windows"
-                  docker push "${image}:windows-latest"
 
     deploy:
         name: Deploy on self-hosted Windows runner

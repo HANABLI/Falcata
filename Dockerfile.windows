@@ -11,8 +11,9 @@ COPY dist\\ C:\\opt\\falcata\\
 COPY docker\\entrypoint.ps1 C:\\opt\\falcata\\entrypoint.ps1
 
 # sanity check
-RUN if (!(Test-Path 'C:\\opt\\falcata\\entrypoint.ps1')) { throw 'entrypoint.ps1 missing in image'; } ; `
-    if (!(Test-Path 'C:\\opt\\falcata\\bin\\WebServer.exe')) { throw 'WebServer.exe missing in image'; }
+RUN if (!(Test-Path 'C:\\opt\\falcata\\entrypoint.ps1')) { throw 'entrypoint.ps1 missing in image'; }
+
+RUN if (!(Test-Path 'C:\\opt\\falcata\\bin\\WebServer.exe')) { throw 'WebServer.exe missing in image'; }
 
 ENV FALCATA_CONFIG="C:\\opt\\falcata\\config\\config.prod.json"
 ENV FALCATA_BIN="C:\\opt\\falcata\\bin\\WebServer.exe"
