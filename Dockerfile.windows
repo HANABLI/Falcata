@@ -12,13 +12,13 @@ WORKDIR C:\opt\falcata
 #     bin/*.dll
 #     plugins/*.dll
 #     config/config.prod.json
-COPY dist\ C:\opt\falcata\
+COPY dist/ C:/opt/falcata/
 
 # Add entrypoint
-COPY docker\entrypoint.ps1 C:\opt\falcata\entrypoint.ps1
+COPY docker/entrypoint.ps1 C:/opt/falcata/entrypoint.ps1
 
 # Make sure paths exist
-RUN New-Item -ItemType Directory -Force C:\opt\falcata\bin, C:\opt\falcata\plugins, C:\opt\falcata\config | Out-Null
+RUN New-Item -ItemType Directory -Force C:/opt/falcata/bin, C:/opt/falcata/plugins, C:/opt/falcata/config | Out-Null
 
 # Default config path (can be overridden by env)
 ENV FALCATA_CONFIG="C:\opt\falcata\config\config.prod.json"
