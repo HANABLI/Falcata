@@ -141,6 +141,7 @@ jobs:
                   password: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Pull & restart (docker compose)
+              shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "{0}"
               env:
                   DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
               run: |
@@ -149,12 +150,13 @@ jobs:
                   $img = ("ghcr.io/${{ github.repository }}").ToLower()
                   $tag = "${{ github.ref_name }}"
 
-                  docker pull "$img:$tag-windows"
+                  $full = "${img}:${tag}-windows"
+                  Write-Host "Pulling $full"
+
+                  docker pull $full
 
                   Set-Location $env:DEPLOY_PATH
-
-                  # Force compose to use the exact tag image (recommended)
-                  $env:FALCATA_IMAGE = "$img:$tag-windows"
+                  $env:FALCATA_IMAGE = $full
 
                   docker compose -f docker-compose.windows.yml up -d --remove-orphans
                   docker ps
