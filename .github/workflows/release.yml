@@ -82,62 +82,78 @@ jobs:
                   docker version
 
                   docker build -f Dockerfile.windows `
-                    -t "${image}:${tag}-windows" `
-                    .
+                  -t "${image}:${tag}-windows" `
+                  -t "${image}:windows-latest" `
+                  .
 
                   docker push "${image}:${tag}-windows"
+                  docker push "${image}:windows-latest"
 
     deploy:
         name: Deploy on self-hosted Windows runner
         needs: windows-release
         runs-on: [self-hosted, windows, x64, azure-prod]
+        environment: secrets
 
-        # IMPORTANT: bypass ExecutionPolicy + avoid pwsh dependency
+        permissions:
+            contents: read
+            packages: read
+
+        # IMPORTANT: bypass ExecutionPolicy + no pwsh dependency
         defaults:
             run:
                 shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "{0}"
 
         steps:
-            - name: Prepare runtime files (.env, compose, config)
-              shell: cmd
+            - name: Checkout repository (to get compose + config)
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 1
+
+            - name: Prepare runtime files on target (DEPLOY_PATH)
               env:
-                  DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+                  DEPLOY_PATH: ${{ vars.DEPLOY_PATH }} # C:\opt\falcata
                   JWT_SECRET: ${{ secrets.JWT_SECRET }}
                   PG_CONNINFO: ${{ secrets.PG_CONNINFO }}
               run: |
-                  if not exist "%DEPLOY_PATH%" mkdir "%DEPLOY_PATH%"
-                  if not exist "%DEPLOY_PATH%\config" mkdir "%DEPLOY_PATH%\config"
+                  $ErrorActionPreference = "Stop"
 
-                  rem --- write .env ---
-                  > "%DEPLOY_PATH%\.env" echo JWT_SECRET=%JWT_SECRET%
-                  >> "%DEPLOY_PATH%\.env" echo PG_CONNINFO=%PG_CONNINFO%
+                  $deployPath = $env:DEPLOY_PATH
+                  New-Item -ItemType Directory -Force -Path $deployPath | Out-Null
+                  New-Item -ItemType Directory -Force -Path (Join-Path $deployPath "config") | Out-Null
 
-                  if not exist "%DEPLOY_PATH%" mkdir "%DEPLOY_PATH%"
-                  if not exist "%DEPLOY_PATH%\config" mkdir "%DEPLOY_PATH%\config"
+                  # Write .env in DEPLOY_PATH (docker compose auto-loads it)
+                  $envFile = Join-Path $deployPath ".env"
+                  @"
+                  JWT_SECRET=$($env:JWT_SECRET)
+                  PG_CONNINFO=$($env:PG_CONNINFO)
+                  "@ | Set-Content -Path $envFile -Encoding ASCII
 
-                  copy /Y "%GITHUB_WORKSPACE%\docker-compose.windows.yml" "%DEPLOY_PATH%\docker-compose.windows.yml"
-                  copy /Y "%GITHUB_WORKSPACE%\config\config.prod.json" "%DEPLOY_PATH%\config\config.prod.json"
+                  # Copy compose + config from the repo to DEPLOY_PATH
+                  Copy-Item -Force ".\docker-compose.windows.yml" (Join-Path $deployPath "docker-compose.windows.yml")
+                  Copy-Item -Force ".\config\config.prod.json" (Join-Path $deployPath "config\config.prod.json")
+
+            - name: Login to GHCR
+              uses: docker/login-action@v3
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Pull & restart (docker compose)
+              env:
+                  DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
               run: |
                   $ErrorActionPreference = "Stop"
 
                   $img = ("ghcr.io/${{ github.repository }}").ToLower()
                   $tag = "${{ github.ref_name }}"
 
-                  # Always pull the exact image for the tag
                   docker pull "$img:$tag-windows"
 
-                  # Optional
-                  docker pull "$img:windows-latest" | Out-Null
+                  Set-Location $env:DEPLOY_PATH
 
-                  # Your docker-compose.windows.yml lives on the target machine at DEPLOY_PATH
-                  $deployPath = "${{ vars.DEPLOY_PATH }}"
-                  if (-not (Test-Path $deployPath)) { throw "DEPLOY_PATH not found: $deployPath" }
-
-                  Set-Location $deployPath
-
-                  # Force compose to use the exact image for this tag
+                  # Force compose to use the exact tag image (recommended)
                   $env:FALCATA_IMAGE = "$img:$tag-windows"
 
                   docker compose -f docker-compose.windows.yml up -d --remove-orphans
