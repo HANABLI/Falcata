@@ -131,7 +131,7 @@ jobs:
                   $ErrorActionPreference = "Stop"
 
                   # Ensure directories
-                  New-Item -ItemType Directory -Force -Path "dist\bin","dist\plugins","dist\config" | Out-Null
+                  New-Item -ItemType Directory -Force -Path "dist\bin","dist\plugins","dist\config","dist\static" | Out-Null
 
                   Write-Host "=== Listing build tree (top) ==="
                   if (Test-Path "build") {
