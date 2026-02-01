@@ -114,7 +114,8 @@ jobs:
               run: |
                   $tc = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
                   cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release `
-                    -DCMAKE_TOOLCHAIN_FILE="$tc"
+                    -DCMAKE_TOOLCHAIN_FILE="$tc" `
+                    -DVCPKG_TARGET_TRIPLET=x64-windows
 
             - name: Build
               run: cmake --build build --parallel
@@ -134,10 +135,10 @@ jobs:
 
                   Write-Host "=== Listing build tree (top) ==="
                   if (Test-Path "build") {
-                    Get-ChildItem build -Force | Select-Object Name, FullName
+                    Get-ChildItem build -Recurse -Force | Select-Object Name, FullName
                   } else {
                     Write-Host "build folder not found. Current directory:"
-                    Get-ChildItem . -Force | Select-Object Name, FullName
+                    Get-ChildItem . -Recurse -Force | Select-Object Name, FullName
                     throw "build folder not found. Ensure you configured with: cmake -S . -B build ..."
                   }
 
@@ -177,7 +178,7 @@ jobs:
                     Copy-Item -LiteralPath $_.FullName -Destination "dist\bin\" -Force
                   }
 
-                  # ---- 2) Copy plugin DLLs into dist\plugins ----
+                  # Copy plugin DLLs into dist\plugins
                   # Heuristic: any DLL with "Plugin" in its name
                   $searchRoots = @("build")
                   foreach ($root in $searchRoots) {
@@ -189,12 +190,36 @@ jobs:
                     }
                   }
 
-                  # ---- 3) Copy config example -----
+                  # MSVC CRT (VC143) -> dist\bin  (CRUCIAL for ServerCore)
+                  $crtDir = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\2022\*\VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT" `
+                    -Directory -ErrorAction SilentlyContinue |
+                    Sort-Object FullName -Descending |
+                    Select-Object -First 1
+
+                  if (-not $crtDir) {
+                    throw "MSVC CRT directory not found. Ensure VS 2022 Build Tools (C++ workload) is installed on the runner."
+                  }
+
+                  Copy-Item -Force "$($crtDir.FullName)\*.dll" "dist\bin\"
+
+                  # show what we packaged
+                  "=== dist\bin ==="
+                  Get-ChildItem dist\bin | Select-Object Name,Length
+                  "=== dist\plugins ==="
+                  Get-ChildItem dist\plugins | Select-Object Name,Length
+
+                  # Copy config example
                   if (Test-Path "config.prod.json") {
                     Copy-Item "config.prod.json" "dist\config\config.prod.json" -Force
                   } elseif (Test-Path "config.json") {
                     Copy-Item "config.json" "dist\config\config.prod.json" -Force
                   }
+
+                  # Copy static content
+                  if (Test-Path "TestStaticContent\index.html") {
+                    Copy-Item "TestStaticContent\index.html" "dist\static\index.html" -Force
+                  }
+
 
                   Write-Host "dist content:"
                   Get-ChildItem dist -Recurse | Select-Object FullName, Length
