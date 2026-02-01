@@ -1,78 +1,78 @@
 {
-  "server": {
-    "Port": "8080",
-    "InactivityTimeout": "1.0",
-    "RequestTimeout": "60.0",
-    "IdleTimeout": "60.0",
-    "HeaderLineLimit": "1000000"
-  },
-  "plugins-image": "${PLUGINS_DIR}",
-  "plugins-runtime": "${PLUGINS_RUNTIME_DIR}",
-  "plugins-enabled": [
-    "AuthSigninPlugin",
-    "StaticContentPlugin",
-    "ChatRoomPlugin",
-    "mqttClientPlugin"
-  ],
-  "plugins": {
-    "StaticContentPlugin": {
-      "module": "StaticContentPlugin",
-      "configuration": {
-        "space": "/static",
-        "root": "/opt/falcata/static",
-        "filtre": {
-          "bar": ["*.html", "*.css"]
-        }
-      }
+    "server": {
+        "Port": "8080",
+        "InactivityTimeout": "1.0",
+        "RequestTimeout": "60.0",
+        "IdleTimeout": "60.0",
+        "HeaderLineLimit": "1000000"
     },
-    "ChatRoomPlugin": {
-      "module": "ChatRoomPlugin",
-      "configuration": {
-        "space": "/chat",
-        "root": "/opt/falcata/static",
-        "filtre": {
-          "bar": ["*.html", "*.css"]
-        }
-      }
-    },
-    "mqttClientPlugin": {
-      "module": "mqttClientPlugin",
-      "configuration": {
-        "space": "/mqtt",
-        "root": "/opt/falcata/static",
-        "filtre": {
-          "bar": ["*.html", "*.css"]
+    "plugins-image": "C:\\opt\\falcata\\plugins",
+    "plugins-runtime": "C:\\opt\\falcata\\plugins\\runtime",
+    "plugins-enabled": [
+        "AuthSigninPlugin",
+        "StaticContentPlugin",
+        "ChatRoomPlugin",
+        "mqttClientPlugin"
+    ],
+    "plugins": {
+        "StaticContentPlugin": {
+            "module": "StaticContentPlugin",
+            "configuration": {
+                "space": "/static",
+                "root": "C:\\opt\\falcata\\static",
+                "filtre": {
+                    "bar": ["*.html", "*.css"]
+                }
+            }
         },
-        "Port": 1883,
-        "Host": "mqtt",
-        "Protocol": "mqtt://",
-        "UserName": "",
-        "Password": "",
-        "Client-Id": "eed87e2c-fff2-4907-b505-0c0c8aae99701764711865515",
-        "Clean-Session": true,
-        "Reconnect-Period": 1,
-        "Connect-Timeout": 300,
-        "KeepAlive": 300,
-        "QoS": 1,
-        "Will-Topic": "",
-        "Will-Retain": true,
-        "Will-Payload": ""
-      }
-    },
-    "AuthSigninPlugin": {
-      "module": "AuthSigninPlugin",
-      "configuration": {
-        "spaces": [
-          { "space": "/auth/signin" },
-          { "space": "/auth/login" },
-          { "space": "/auth/users" }
-        ],
-        "PgConninfo": "${PG_CONNINFO}",
-        "JwtSecret": "${JWT_SECRET}",
-        "JwtTtlSec": 3600,
-        "JwtIss": "falcata-iot",
-        "JwtAud": "falcata-web"
-      }
+        "ChatRoomPlugin": {
+            "module": "ChatRoomPlugin",
+            "configuration": {
+                "space": "/chat",
+                "root": "C:\\opt\\falcata\\static",
+                "filtre": {
+                    "bar": ["*.html", "*.css"]
+                }
+            }
+        },
+        "mqttClientPlugin": {
+            "module": "mqttClientPlugin",
+            "configuration": {
+                "space": "/mqtt",
+                "root": "C:\\opt\\falcata\\static",
+                "filtre": {
+                    "bar": ["*.html", "*.css"]
+                },
+                "Port": 1883,
+                "Host": "mqtt",
+                "Protocol": "mqtt://",
+                "UserName": "",
+                "Password": "",
+                "Client-Id": "eed87e2c-fff2-4907-b505-0c0c8aae99701764711865515",
+                "Clean-Session": true,
+                "Reconnect-Period": 1,
+                "Connect-Timeout": 300,
+                "KeepAlive": 300,
+                "QoS": 1,
+                "Will-Topic": "",
+                "Will-Retain": true,
+                "Will-Payload": ""
+            }
+        },
+        "AuthSigninPlugin": {
+            "module": "AuthSigninPlugin",
+            "configuration": {
+                "spaces": [
+                    { "space": "/auth/signin" },
+                    { "space": "/auth/login" },
+                    { "space": "/auth/users" }
+                ],
+                "PgConninfo": "${PG_CONNINFO}",
+                "JwtSecret": "${JWT_SECRET}",
+                "JwtTtlSec": 3600,
+                "JwtIss": "falcata-iot",
+                "JwtAud": "falcata-web"
+            }
+        }
     }
-  }
 }
