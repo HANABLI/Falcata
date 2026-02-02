@@ -3,7 +3,8 @@ services:
         image: ghcr.io/hanabli/falcata:windows-latest
         container_name: falcata-webserver
         restart: unless-stopped
-
+        env_file:
+            - .env
         ports:
             - "8080:8080"
 
