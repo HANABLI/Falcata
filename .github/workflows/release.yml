@@ -158,5 +158,5 @@ jobs:
                   Set-Location $env:DEPLOY_PATH
                   $env:FALCATA_IMAGE = $full
 
-                  docker compose --env-file .env -f docker-compose.windows.yml up -d --remove-orphans
+                  docker compose --env-file .\.env -f .\docker-compose.windows.yml up -d --remove-orphans
                   docker ps
