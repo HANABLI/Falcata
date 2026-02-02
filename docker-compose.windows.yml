@@ -1,20 +1,20 @@
 services:
     falcata:
         image: ghcr.io/hanabli/falcata:windows-latest
-        container_name: falcata-webserver
-        restart: unless-stopped
         env_file:
             - .env
+        container_name: falcata-webserver
+        restart: unless-stopped
+
         ports:
             - "8080:8080"
 
         environment:
             # secrets via .env (sur la machine de déploiement)
-            JWT_SECRET: "${JWT_SECRET}"
-
+            # JWT_SECRET: "${JWT_SECRET}"
             # IMPORTANT: mets ici l’IP/hostname de TON postgres (externe)
             # exemple Azure: host=mydb.postgres.database.azure.com port=5432 dbname=iot user=... password=...
-            PG_CONNINFO: "${PG_CONNINFO}"
+            #PG_CONNINFO: "${PG_CONNINFO}"
 
             # chemins Windows DANS le container
             PLUGINS_DIR: "C:\\opt\\falcata\\plugins"
