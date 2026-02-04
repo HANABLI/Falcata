@@ -115,23 +115,32 @@ jobs:
                   DEPLOY_PATH: ${{ vars.DEPLOY_PATH }} # C:\opt\falcata
                   JWT_SECRET: ${{ secrets.JWT_SECRET }}
                   PG_CONNINFO: ${{ secrets.PG_CONNINFO }}
+                  FALCATA_DB: ${{ vars.FALCATA_DB }}
+                  PG_USER: ${{ secrets.PG_USER }}
+                  PG_PASSWORD: ${{secrets.PG_PASSWORD}}
+
               run: |
                   $ErrorActionPreference = "Stop"
 
                   $deployPath = $env:DEPLOY_PATH
                   New-Item -ItemType Directory -Force -Path $deployPath | Out-Null
                   New-Item -ItemType Directory -Force -Path (Join-Path $deployPath "config") | Out-Null
+                  New-Item -ItemType Directory -Force -Path (Join-Path $deployPath "sql") | Out-Null
 
                   # Write .env in DEPLOY_PATH (docker compose auto-loads it)
                   $envFile = Join-Path $deployPath ".env"
                   @"
                   JWT_SECRET=$($env:JWT_SECRET)
                   PG_CONNINFO=$($env:PG_CONNINFO)
+                  FALCATA_DB=$($env:FALCATA_DB)
+                  PG_USER=$($env:PG_USER)
+                  PG_PASSWORD=$($env:PG_PASSWORD)
                   "@ | Set-Content -Path $envFile -Encoding ASCII
 
                   # Copy compose + config from the repo to DEPLOY_PATH
                   Copy-Item -Force ".\docker-compose.windows.yml" (Join-Path $deployPath "docker-compose.windows.yml")
                   Copy-Item -Force ".\config.prod.json" (Join-Path $deployPath "config\config.prod.json")
+                  Copy-Item -Force ".\WebServer\sql\iot.sql"     (Join-Path $deployPath "sql\iot.sql")
 
             - name: Login to GHCR
               uses: docker/login-action@v3

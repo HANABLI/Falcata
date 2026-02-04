@@ -1,6 +1,7 @@
+version: "3.9"
 services:
     falcata:
-        image: ${FALCATA_IMAGE}
+        image: ${FALCATA_IMAGE:-ghcr.io/hanabli/falcata:windows-latest}
         env_file:
             - .env
         container_name: falcata-webserver
@@ -11,10 +12,10 @@ services:
 
         environment:
             # secrets via .env (sur la machine de déploiement)
-            # JWT_SECRET: "${JWT_SECRET}"
+            JWT_SECRET: "${JWT_SECRET}"
             # IMPORTANT: mets ici l’IP/hostname de TON postgres (externe)
             # exemple Azure: host=mydb.postgres.database.azure.com port=5432 dbname=iot user=... password=...
-            # PG_CONNINFO: "${PG_CONNINFO}"
+            PG_CONNINFO: "${PG_CONNINFO}"
 
             # chemins Windows DANS le container
             PLUGINS_DIR: "C:\\opt\\falcata\\plugins"
@@ -33,3 +34,20 @@ services:
             #   target: C:\opt\falcata\plugins
 
         isolation: process
+
+    postgres:
+        image: postgres:16
+        env_file:
+            - .env
+        container_name: falcata-postgres
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: ${FALCATA_DB}
+            POSTGRES_USER: ${PG_USER}
+            POSTGRES_PASSWORD: ${PG_PASSWORD}
+        ports:
+            - "5432:5433"
+        volumes:
+            - pgdata:/var/lib/postgresql/data
+            # Execute schema once on first startup
+            - ./sql/iot.sql:/docker-entrypoint-initdb.d/01_iot.sql
