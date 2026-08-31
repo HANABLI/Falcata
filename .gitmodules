@@ -61,3 +61,12 @@
 [submodule "UuidV7"]
 	path = UuidV7
 	url= https://github.com/HANABLI/UuidV7.git
+[submodule "Smtp"]
+	path = Smtp
+	url = https://github.com/HANABLI/Smtp.git
+[submodule "Hmac"]
+	path = Hmac
+	url = https://github.com/HANABLI/Hmac.git
+[submodule "Pbkdf2"]
+		path = Pbkdf2
+		url = https://github.com/HANABLI/Pbkdf2.git
