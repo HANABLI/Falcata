@@ -64,6 +64,9 @@
 [submodule "Smtp"]
 	path = Smtp
 	url = https://github.com/HANABLI/Smtp.git
+[submodule "Sasl"]
+	path = Sasl
+	url = https://github.com/HANABLI/Sasl.git
 [submodule "Hmac"]
 	path = Hmac
 	url = https://github.com/HANABLI/Hmac.git
