@@ -26,6 +26,7 @@ jobs:
                 os:
                     - ubuntu-22.04
                     - windows-2022
+                    - self-hosted
 
                 compiler:
                     - gcc
@@ -331,6 +332,45 @@ jobs:
                   clang-tidy `
                     $cpp `
                     -p build
+            # ==============================================================
+            # SONARQUBE
+            #
+            # Runs exactly once, after the complete build/test matrix.
+            #
+            # IMPORTANT:
+            # This runner must have network access to the private SonarQube
+            # server.
+            # ==============================================================
+            - name: Test SonarQube connectivity
+              if: runner.os == 'self-hosted'
+              shell: pwsh
+              env:
+                  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+              run: |
+                  $ErrorActionPreference = "Stop"
+
+                  if ([string]::IsNullOrWhiteSpace($env:SONAR_HOST_URL)) {
+                    throw "SONAR_HOST_URL is not configured"
+                  }
+
+                  $url = "$($env:SONAR_HOST_URL.TrimEnd('/'))/api/system/status"
+
+                  Write-Host "Testing SonarQube: $url"
+
+                  $response = Invoke-WebRequest `
+                    -Uri $url `
+                    -UseBasicParsing `
+                    -TimeoutSec 30
+
+                  Write-Host "HTTP Status: $($response.StatusCode)"
+                  Write-Host $response.Content
+
+            - name: SonarQube
+              if: runner.os == 'self-hosted'
+              uses: SonarSource/sonarqube-scan-action@master
+              env:
+                  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+                  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
             # ==========================================================
             # WINDOWS PACKAGE
@@ -621,98 +661,3 @@ jobs:
                   path: Falcata-win64.zip
                   if-no-files-found: error
                   retention-days: 7
-        # ==============================================================
-        # SONARQUBE
-        #
-        # Runs exactly once, after the complete build/test matrix.
-        #
-        # IMPORTANT:
-        # This runner must have network access to the private SonarQube
-        # server.
-        # ==============================================================
-    sonar:
-        name: SonarQube Analysis
-
-        runs-on:
-            - self-hosted
-
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
-                  submodules: recursive
-
-            - name: Setup Ninja
-              uses: seanmiddleditch/gha-setup-ninja@v5
-
-            - name: Setup MSVC
-              uses: ilammy/msvc-dev-cmd@v1
-
-            - name: Verify build environment
-              shell: pwsh
-              run: |
-                  $ErrorActionPreference = "Stop"
-
-                  cmake --version
-                  ninja --version
-                  git --version
-                  where.exe cl
-
-                  if (-not (Test-Path "C:\vcpkg\vcpkg.exe")) {
-                    throw "vcpkg not found"
-                  }
-
-                  C:\vcpkg\vcpkg.exe version
-
-            - name: Test SonarQube connectivity
-              shell: pwsh
-              env:
-                  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-              run: |
-                  $ErrorActionPreference = "Stop"
-
-                  if ([string]::IsNullOrWhiteSpace($env:SONAR_HOST_URL)) {
-                    throw "SONAR_HOST_URL is not configured"
-                  }
-
-                  $url = "$($env:SONAR_HOST_URL.TrimEnd('/'))/api/system/status"
-
-                  Write-Host "Testing SonarQube: $url"
-
-                  $response = Invoke-WebRequest `
-                    -Uri $url `
-                    -UseBasicParsing `
-                    -TimeoutSec 30
-
-                  Write-Host "HTTP Status: $($response.StatusCode)"
-                  Write-Host $response.Content
-
-            - name: Configure CMake
-              shell: pwsh
-              run: |
-                  $ErrorActionPreference = "Stop"
-
-                  $tc = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
-
-                  cmake `
-                    -S . `
-                    -B build `
-                    -G Ninja `
-                    -DCMAKE_BUILD_TYPE=Debug `
-                    -DCMAKE_TOOLCHAIN_FILE="$tc" `
-                    -DVCPKG_TARGET_TRIPLET=x64-windows `
-                    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-
-            - name: Build
-              run: cmake --build build --parallel
-
-            - name: Test
-              working-directory: build
-              run: ctest --output-on-failure
-
-            - name: SonarQube
-              uses: SonarSource/sonarqube-scan-action@master
-              env:
-                  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-                  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
