@@ -621,95 +621,50 @@ jobs:
                   path: Falcata-win64.zip
                   if-no-files-found: error
                   retention-days: 7
-
-    # ==============================================================
-    # SONARQUBE
-    #
-    # Runs exactly once, after the complete build/test matrix.
-    #
-    # IMPORTANT:
-    # This runner must have network access to the private SonarQube
-    # server.
-    # ==============================================================
+        # ==============================================================
+        # SONARQUBE
+        #
+        # Runs exactly once, after the complete build/test matrix.
+        #
+        # IMPORTANT:
+        # This runner must have network access to the private SonarQube
+        # server.
+        # ==============================================================
     sonar:
         name: SonarQube Analysis
 
-        # needs:
-        #     - build-test
-
         runs-on:
             - self-hosted
-            - windows
-            - x64
 
         steps:
-            # ----------------------------------------------------------
-            # Checkout
-            # ----------------------------------------------------------
             - name: Checkout
               uses: actions/checkout@v4
               with:
                   fetch-depth: 0
                   submodules: recursive
 
-            # ----------------------------------------------------------
-            # Ninja
-            # ----------------------------------------------------------
             - name: Setup Ninja
               uses: seanmiddleditch/gha-setup-ninja@v5
 
-            # ----------------------------------------------------------
-            # Verify MSVC
-            # ----------------------------------------------------------
             - name: Setup MSVC
               uses: ilammy/msvc-dev-cmd@v1
 
-            # ----------------------------------------------------------
-            # Verify vcpkg
-            #
-            # This runner is a different machine from the GitHub-hosted
-            # Windows runner used by build-test.
-            # ----------------------------------------------------------
-            - name: Verify vcpkg
+            - name: Verify build environment
               shell: pwsh
               run: |
                   $ErrorActionPreference = "Stop"
 
-                  $vcpkgRoot = "C:\vcpkg"
-                  $vcpkgExe = "$vcpkgRoot\vcpkg.exe"
-
-                  if (-not (Test-Path $vcpkgExe)) {
-                    throw "vcpkg not found: $vcpkgExe"
-                  }
-
-                  & $vcpkgExe version
-
-            # ----------------------------------------------------------
-            # Verify required dependencies
-            # ----------------------------------------------------------
-            - name: Verify Sonar build environment
-              shell: pwsh
-              run: |
-                  $ErrorActionPreference = "Stop"
-
-                  Write-Host "=== CMake ==="
                   cmake --version
-
-                  Write-Host "=== Ninja ==="
                   ninja --version
-
-                  Write-Host "=== Git ==="
                   git --version
-
-                  Write-Host "=== MSVC ==="
                   where.exe cl
 
-                  Write-Host "=== vcpkg ==="
+                  if (-not (Test-Path "C:\vcpkg\vcpkg.exe")) {
+                    throw "vcpkg not found"
+                  }
+
                   C:\vcpkg\vcpkg.exe version
 
-            # ----------------------------------------------------------
-            # Test connectivity to PRIVATE SonarQube
-            # ----------------------------------------------------------
             - name: Test SonarQube connectivity
               shell: pwsh
               env:
@@ -718,16 +673,12 @@ jobs:
                   $ErrorActionPreference = "Stop"
 
                   if ([string]::IsNullOrWhiteSpace($env:SONAR_HOST_URL)) {
-                    throw "SONAR_HOST_URL secret is empty."
+                    throw "SONAR_HOST_URL is not configured"
                   }
-
-                  Write-Host "Testing SonarQube:"
-                  Write-Host "$env:SONAR_HOST_URL"
 
                   $url = "$($env:SONAR_HOST_URL.TrimEnd('/'))/api/system/status"
 
-                  Write-Host "Endpoint:"
-                  Write-Host "$url"
+                  Write-Host "Testing SonarQube: $url"
 
                   $response = Invoke-WebRequest `
                     -Uri $url `
@@ -735,24 +686,14 @@ jobs:
                     -TimeoutSec 30
 
                   Write-Host "HTTP Status: $($response.StatusCode)"
-                  Write-Host "Response:"
                   Write-Host $response.Content
 
-            # ----------------------------------------------------------
-            # Configure CMake
-            #
-            # compile_commands.json is required for C/C++ analysis.
-            # ----------------------------------------------------------
             - name: Configure CMake
               shell: pwsh
               run: |
                   $ErrorActionPreference = "Stop"
 
                   $tc = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
-
-                  if (-not (Test-Path $tc)) {
-                    throw "vcpkg CMake toolchain not found: $tc"
-                  }
 
                   cmake `
                     -S . `
@@ -763,44 +704,13 @@ jobs:
                     -DVCPKG_TARGET_TRIPLET=x64-windows `
                     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
-            # ----------------------------------------------------------
-            # Verify compilation database
-            # ----------------------------------------------------------
-            - name: Verify compile_commands.json
-              shell: pwsh
-              run: |
-                  $ErrorActionPreference = "Stop"
-
-                  $compileCommands = "build\compile_commands.json"
-
-                  if (-not (Test-Path $compileCommands)) {
-                    throw "compile_commands.json was not generated: $compileCommands"
-                  }
-
-                  $file = Get-Item $compileCommands
-
-                  Write-Host "compile_commands.json:"
-                  Write-Host "Path: $($file.FullName)"
-                  Write-Host "Size: $($file.Length) bytes"
-
-            # ----------------------------------------------------------
-            # Build
-            # ----------------------------------------------------------
             - name: Build
-              run: |
-                  cmake --build build --parallel
+              run: cmake --build build --parallel
 
-            # ----------------------------------------------------------
-            # Test
-            # ----------------------------------------------------------
             - name: Test
               working-directory: build
-              run: |
-                  ctest --output-on-failure
+              run: ctest --output-on-failure
 
-            # ----------------------------------------------------------
-            # SonarQube
-            # ----------------------------------------------------------
             - name: SonarQube
               uses: SonarSource/sonarqube-scan-action@master
               env:
