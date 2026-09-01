@@ -231,11 +231,6 @@ jobs:
                   path: Falcata-win64.zip
                   if-no-files-found: error
                   retention-days: 7
-            - name: sonar
-              uses: sonarsource/sonarqube-scan-action@master
-              env:
-                  SONAR_TOKEN: ${{secrets.SONAR_TOKEN}}
-                  SONAR_HOST_URL: ${{secrets.SONAR_HOST_URL}}
 
             - name: Clang-Format check (Ubuntu)
               if: runner.os == 'Linux'
@@ -267,6 +262,68 @@ jobs:
                   $cpp = git ls-files | Where-Object { $_ -match '\\.(cpp|cc|cxx)$' }
                   if (-not $cpp) { Write-Host "No C++ sources found."; exit 0 }
                   clang-tidy $cpp -p build
+
+    sonar:
+        name: SonarQube Analysis
+        needs: build-test
+        runs-on: [self-hosted, windows, x64]
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+                  submodules: recursive
+
+            - name: Test SonarQube connectivity
+              shell: pwsh
+              env:
+                  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+              run: |
+                  $ErrorActionPreference = "Stop"
+
+                  Write-Host "Testing SonarQube:"
+                  Write-Host "$env:SONAR_HOST_URL"
+
+                  $url = "$env:SONAR_HOST_URL/api/system/status"
+
+                  $response = Invoke-WebRequest `
+                    -Uri $url `
+                    -UseBasicParsing `
+                    -TimeoutSec 30
+
+                  Write-Host "HTTP Status: $($response.StatusCode)"
+                  Write-Host $response.Content
+
+            - name: Setup MSVC
+              uses: ilammy/msvc-dev-cmd@v1
+
+            - name: Configure CMake
+              shell: pwsh
+              run: |
+                  $tc = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
+
+                  cmake `
+                    -S . `
+                    -B build `
+                    -G Ninja `
+                    -DCMAKE_BUILD_TYPE=Debug `
+                    -DCMAKE_TOOLCHAIN_FILE="$tc" `
+                    -DVCPKG_TARGET_TRIPLET=x64-windows `
+                    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+            - name: Build
+              run: cmake --build build --parallel
+
+            - name: Test
+              working-directory: build
+              run: ctest --output-on-failure
+
+            - name: SonarQube
+              uses: SonarSource/sonarqube-scan-action@master
+              env:
+                  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+                  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
     # sanitizers:
     #     name: Sanitizers (ASan/UBSan)
