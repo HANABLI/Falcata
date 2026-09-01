@@ -44,6 +44,12 @@ jobs:
 
                     - os: windows-2022
                       compiler: clang
+                    # Self-hosted
+                    - os: seld-hosted
+                      compiler: gcc
+
+                    - os: seld-hosted
+                      compiler: clang
 
         steps:
             # ----------------------------------------------------------
