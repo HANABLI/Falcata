@@ -3,6 +3,7 @@ name: CI
 on:
     push:
         branches: [master]
+
     pull_request:
 
 concurrency:
@@ -10,221 +11,610 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
+    # ============================================================
+    # BUILD & TEST MATRIX
+    # ============================================================
     build-test:
         name: Build & Test (${{ matrix.os }}, ${{ matrix.compiler }})
+
         runs-on: ${{ matrix.os }}
+
         strategy:
             fail-fast: false
+
             matrix:
-                os: [ubuntu-22.04, windows-2022]
-                compiler: [gcc, clang, msvc]
+                os:
+                    - ubuntu-22.04
+                    - windows-2022
+
+                compiler:
+                    - gcc
+                    - clang
+                    - msvc
+
                 exclude:
+                    # Ubuntu does not use MSVC
                     - os: ubuntu-22.04
                       compiler: msvc
+
+                    # Windows uses MSVC only
                     - os: windows-2022
                       compiler: gcc
+
                     - os: windows-2022
                       compiler: clang
 
         steps:
+            # ----------------------------------------------------------
+            # Checkout
+            # ----------------------------------------------------------
             - name: Checkout (with submodules)
               uses: actions/checkout@v4
               with:
                   submodules: recursive
 
+            # ----------------------------------------------------------
+            # Ninja
+            # ----------------------------------------------------------
             - name: Setup Ninja
               uses: seanmiddleditch/gha-setup-ninja@v5
 
-            - name: Install deps (Ubuntu)
+            # ==========================================================
+            # UBUNTU DEPENDENCIES
+            # ==========================================================
+            - name: Install dependencies (Ubuntu)
               if: runner.os == 'Linux'
               run: |
-                  sudo apt update
-                  sudo apt install -y build-essential cmake ninja-build clang clang-tidy clang-format ccache libsodium-dev libpq-dev
+                  set -e
 
+                  sudo apt-get update
+
+                  sudo apt-get install -y \
+                    build-essential \
+                    cmake \
+                    ninja-build \
+                    clang \
+                    clang-tidy \
+                    clang-format \
+                    ccache \
+                    libsodium-dev \
+                    libpq-dev
+
+            # ==========================================================
+            # WINDOWS / MSVC
+            # ==========================================================
             - name: Setup MSVC Developer Command Prompt
               if: runner.os == 'Windows'
               uses: ilammy/msvc-dev-cmd@v1
 
+            # ----------------------------------------------------------
+            # LLVM / clang-format / clang-tidy
+            # ----------------------------------------------------------
             - name: Install LLVM (Windows)
               if: runner.os == 'Windows'
               shell: pwsh
               run: |
-                  choco install llvm -y --no-progress
-                  $llvmBin = "C:\\Program Files\\LLVM\\bin"
-                  echo "LLVM bin: $llvmBin"
-                  echo $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+                  $ErrorActionPreference = "Stop"
 
-            # --- libsodium via vcpkg at the EXACT path our CMake hard-codes ---
+                  choco install llvm -y --no-progress
+
+                  $llvmBin = "C:\Program Files\LLVM\bin"
+
+                  if (-not (Test-Path $llvmBin)) {
+                    throw "LLVM installation directory not found: $llvmBin"
+                  }
+
+                  Write-Host "LLVM bin: $llvmBin"
+
+                  $llvmBin | Out-File `
+                    -FilePath $env:GITHUB_PATH `
+                    -Encoding utf8 `
+                    -Append
+
+            # ==========================================================
+            # VCPKG / WINDOWS DEPENDENCIES
+            # ==========================================================
             - name: Cache vcpkg (Windows)
               if: runner.os == 'Windows'
               uses: actions/cache@v4
               with:
-                  path: |
-                      C:\vcpkg
+                  path: C:\vcpkg
                   key: vcpkg-${{ runner.os }}-${{ hashFiles('.gitmodules') }}
                   restore-keys: |
                       vcpkg-${{ runner.os }}-
 
-            - name: Install libsodium with vcpkg (Windows)
+            - name: Install dependencies with vcpkg (Windows)
               if: runner.os == 'Windows'
               shell: pwsh
               run: |
+                  $ErrorActionPreference = "Stop"
+
                   $vcpkgRoot = "C:\vcpkg"
-                  New-Item -ItemType Directory -Force -Path $vcpkgRoot | Out-Null
+
+                  New-Item `
+                    -ItemType Directory `
+                    -Force `
+                    -Path $vcpkgRoot | Out-Null
 
                   if (-not (Test-Path "$vcpkgRoot\.git")) {
-                    git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
+                    Write-Host "Cloning vcpkg..."
+
+                    git clone `
+                      https://github.com/microsoft/vcpkg.git `
+                      $vcpkgRoot
                   }
 
                   Push-Location $vcpkgRoot
+
                   git pull
+
                   .\bootstrap-vcpkg.bat
+
                   .\vcpkg.exe version
 
-                  # Install the dependency your Auth module needs
-                  .\vcpkg.exe install libsodium:x64-windows libpq:x64-windows
+                  Write-Host "Installing Windows dependencies..."
+
+                  .\vcpkg.exe install `
+                    libsodium:x64-windows `
+                    libpq:x64-windows
+
                   Pop-Location
 
+            # ==========================================================
+            # CCACHE / UBUNTU
+            # ==========================================================
             - name: Cache ccache (Ubuntu)
               if: runner.os == 'Linux'
               uses: actions/cache@v4
               with:
-                  path: |
-                      ~/.cache/ccache
+                  path: ~/.cache/ccache
                   key: ccache-${{ runner.os }}-${{ matrix.compiler }}-${{ github.sha }}
                   restore-keys: |
                       ccache-${{ runner.os }}-${{ matrix.compiler }}-
 
+            # ==========================================================
+            # CLANG FORMAT
+            #
+            # Run before compilation so formatting failures stop early.
+            # ==========================================================
+            - name: Clang-Format check (Ubuntu)
+              if: runner.os == 'Linux'
+              run: |
+                  set -e
+
+                  clang-format --version
+
+                  files="$(git ls-files '*.cpp' '*.hpp' '*.h' '*.c')"
+
+                  if [ -z "$files" ]; then
+                    echo "No C/C++ source files found."
+                    exit 0
+                  fi
+
+                  clang-format \
+                    --dry-run \
+                    --Werror \
+                    $files
+
+            - name: Clang-Format check (Windows)
+              if: runner.os == 'Windows'
+              shell: pwsh
+              run: |
+                  $ErrorActionPreference = "Stop"
+
+                  clang-format --version
+
+                  $files = @(
+                    git ls-files |
+                    Where-Object {
+                      $_ -match '\.(c|h|cpp|hpp)$'
+                    }
+                  )
+
+                  if (-not $files) {
+                    Write-Host "No source files found."
+                    exit 0
+                  }
+
+                  clang-format `
+                    --dry-run `
+                    --Werror `
+                    $files
+
+            # ==========================================================
+            # CMAKE CONFIGURATION - UBUNTU
+            # ==========================================================
             - name: Configure (Ubuntu)
               if: runner.os == 'Linux'
               env:
                   CC: ${{ matrix.compiler == 'clang' && 'clang' || 'gcc' }}
                   CXX: ${{ matrix.compiler == 'clang' && 'clang++' || 'g++' }}
               run: |
-                  cmake -S . -B build -G Ninja \
+                  set -e
+
+                  cmake \
+                    -S . \
+                    -B build \
+                    -G Ninja \
                     -DCMAKE_BUILD_TYPE=Debug \
+                    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
                     -DCMAKE_C_COMPILER_LAUNCHER=ccache \
                     -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
+            # ==========================================================
+            # CMAKE CONFIGURATION - WINDOWS / MSVC
+            # ==========================================================
             - name: Configure (Windows / MSVC)
               if: runner.os == 'Windows'
               shell: pwsh
               run: |
+                  $ErrorActionPreference = "Stop"
+
                   $tc = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
-                  cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release `
+
+                  if (-not (Test-Path $tc)) {
+                    throw "vcpkg CMake toolchain not found: $tc"
+                  }
+
+                  cmake `
+                    -S . `
+                    -B build `
+                    -G Ninja `
+                    -DCMAKE_BUILD_TYPE=Release `
                     -DCMAKE_TOOLCHAIN_FILE="$tc" `
-                    -DVCPKG_TARGET_TRIPLET=x64-windows
+                    -DVCPKG_TARGET_TRIPLET=x64-windows `
+                    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
+            # ==========================================================
+            # BUILD
+            # ==========================================================
             - name: Build
-              run: cmake --build build --parallel
-
-            - name: Test
               run: |
-                  cd build
+                  cmake --build build --parallel
+
+            # ==========================================================
+            # TEST
+            # ==========================================================
+            - name: Test
+              working-directory: build
+              run: |
                   ctest --output-on-failure
 
-            - name: Package dist (robust)
+            # ==========================================================
+            # CLANG-TIDY - UBUNTU
+            #
+            # Best effort for now. Remove "|| true" later when you want
+            # clang-tidy to become a blocking quality gate.
+            # ==========================================================
+            - name: Clang-Tidy (Ubuntu, best-effort)
+              if: runner.os == 'Linux'
+              run: |
+                  set -e
+
+                  clang-tidy --version
+
+                  files="$(git ls-files '*.cpp')"
+
+                  if [ -z "$files" ]; then
+                    echo "No C++ sources found."
+                    exit 0
+                  fi
+
+                  clang-tidy \
+                    $files \
+                    -p build \
+                    || true
+
+            # ==========================================================
+            # CLANG-TIDY - WINDOWS
+            # ==========================================================
+            - name: Clang-Tidy (Windows)
+              if: runner.os == 'Windows'
               shell: pwsh
               run: |
                   $ErrorActionPreference = "Stop"
 
+                  clang-tidy --version
+
+                  $cpp = @(
+                    git ls-files |
+                    Where-Object {
+                      $_ -match '\.(cpp|cc|cxx)$'
+                    }
+                  )
+
+                  if (-not $cpp) {
+                    Write-Host "No C++ sources found."
+                    exit 0
+                  }
+
+                  clang-tidy `
+                    $cpp `
+                    -p build
+
+            # ==========================================================
+            # WINDOWS PACKAGE
+            #
+            # IMPORTANT:
+            # This must only run for the Windows/MSVC matrix entry.
+            # ==========================================================
+            - name: Package dist (Windows)
+              if: runner.os == 'Windows'
+              shell: pwsh
+              run: |
+                  $ErrorActionPreference = "Stop"
+
+                  # --------------------------------------------------------
                   # Ensure directories
-                  New-Item -ItemType Directory -Force -Path "dist\bin","dist\plugins","dist\plugins\runtime","dist\config","dist\static" | Out-Null
+                  # --------------------------------------------------------
+                  New-Item `
+                    -ItemType Directory `
+                    -Force `
+                    -Path `
+                      "dist\bin",
+                      "dist\plugins",
+                      "dist\plugins\runtime",
+                      "dist\config",
+                      "dist\static" |
+                    Out-Null
 
+
+                  # --------------------------------------------------------
+                  # Verify build directory
+                  # --------------------------------------------------------
                   Write-Host "=== Listing build tree (top) ==="
+
                   if (Test-Path "build") {
-                    Get-ChildItem build -Recurse -Force | Select-Object Name, FullName
-                  } else {
-                    Write-Host "build folder not found. Current directory:"
-                    Get-ChildItem . -Recurse -Force | Select-Object Name, FullName
-                    throw "build folder not found. Ensure you configured with: cmake -S . -B build ..."
+
+                    Get-ChildItem `
+                      build `
+                      -Recurse `
+                      -Force |
+                      Select-Object Name, FullName
+
+                  }
+                  else {
+
+                    Write-Host "build folder not found."
+
+                    Get-ChildItem `
+                      . `
+                      -Recurse `
+                      -Force |
+                      Select-Object Name, FullName
+
+                    throw `
+                      "build folder not found. Ensure you configured with: cmake -S . -B build ..."
                   }
 
+
+                  # --------------------------------------------------------
+                  # Locate WebServer.exe
+                  # --------------------------------------------------------
                   Write-Host "=== Searching for WebServer.exe under build/ ==="
-                  $exe = Get-ChildItem -Path "build" -Recurse -File -Filter "WebServer.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+
+                  $exe = Get-ChildItem `
+                    -Path "build" `
+                    -Recurse `
+                    -File `
+                    -Filter "WebServer.exe" `
+                    -ErrorAction SilentlyContinue |
+                    Select-Object -First 1
+
                   if (-not $exe) {
-                    Write-Host "WebServer.exe not found. Searching for any .exe produced..."
-                    Get-ChildItem -Path "build" -Recurse -File -Filter "*.exe" -ErrorAction SilentlyContinue |
-                      Select-Object FullName, Length | Sort-Object FullName | Format-Table -AutoSize
 
-                    throw "WebServer.exe not found under build/. (See exe list above). Check target name or output directory."
+                    Write-Host `
+                      "WebServer.exe not found. Searching for any .exe produced..."
+
+                    Get-ChildItem `
+                      -Path "build" `
+                      -Recurse `
+                      -File `
+                      -Filter "*.exe" `
+                      -ErrorAction SilentlyContinue |
+                      Select-Object FullName, Length |
+                      Sort-Object FullName |
+                      Format-Table -AutoSize
+
+                    throw `
+                      "WebServer.exe not found under build/. Check target name or output directory."
                   }
 
+
+                  # --------------------------------------------------------
+                  # vcpkg runtime
+                  # --------------------------------------------------------
                   $vcpkgRoot = "C:\vcpkg"
-                  $triplet   = "x64-windows"
-                  $installedBin = Join-Path $vcpkgRoot "installed\$triplet\bin"
-                  if (-not (Test-Path $installedBin)) { throw "vcpkg installed bin not found: $installedBin" }
+                  $triplet = "x64-windows"
 
-                  # safest: copy all runtime dlls from vcpkg bin
-                  Get-ChildItem -Path $installedBin -Filter "*.dll" -File | ForEach-Object {
-                    Copy-Item -LiteralPath $_.FullName -Destination "dist\bin" -Force
-                  }
+                  $installedBin = Join-Path `
+                    $vcpkgRoot `
+                    "installed\$triplet\bin"
 
-                  # Also copy DLLs next to the exe output dir (if CMake produced any)
-                  Get-ChildItem -Path $exe.Directory.FullName -Filter "*.dll" -File -ErrorAction SilentlyContinue | ForEach-Object {
-                    Copy-Item -LiteralPath $_.FullName -Destination "dist\bin" -Force
+                  if (-not (Test-Path $installedBin)) {
+                    throw `
+                      "vcpkg installed bin not found: $installedBin"
                   }
 
 
+                  # --------------------------------------------------------
+                  # Copy vcpkg runtime DLLs
+                  # --------------------------------------------------------
+                  Get-ChildItem `
+                    -Path $installedBin `
+                    -Filter "*.dll" `
+                    -File |
+                    ForEach-Object {
+
+                      Copy-Item `
+                        -LiteralPath $_.FullName `
+                        -Destination "dist\bin" `
+                        -Force
+                    }
+
+
+                  # --------------------------------------------------------
+                  # Copy DLLs next to WebServer.exe
+                  # --------------------------------------------------------
                   $exeDir = $exe.Directory.FullName
+
                   Write-Host "WebServer.exe: $($exe.FullName)"
                   Write-Host "Exe directory: $exeDir"
 
-                  # Copy exe + dlls next to it
-                  Copy-Item -LiteralPath $exe.FullName -Destination "dist\bin\WebServer.exe" -Force
-                  Get-ChildItem -Path $exeDir -Filter "*.dll" -ErrorAction SilentlyContinue | ForEach-Object {
-                    Copy-Item -LiteralPath $_.FullName -Destination "dist\bin\" -Force
-                  }
+                  Get-ChildItem `
+                    -Path $exeDir `
+                    -Filter "*.dll" `
+                    -File `
+                    -ErrorAction SilentlyContinue |
+                    ForEach-Object {
 
-                  # Copy plugin DLLs into dist\plugins
-                  # Heuristic: any DLL with "Plugin" in its name
+                      Copy-Item `
+                        -LiteralPath $_.FullName `
+                        -Destination "dist\bin" `
+                        -Force
+                    }
+
+
+                  # --------------------------------------------------------
+                  # Copy executable
+                  # --------------------------------------------------------
+                  Copy-Item `
+                    -LiteralPath $exe.FullName `
+                    -Destination "dist\bin\WebServer.exe" `
+                    -Force
+
+
+                  # --------------------------------------------------------
+                  # Copy DLLs next to executable
+                  # --------------------------------------------------------
+                  Get-ChildItem `
+                    -Path $exeDir `
+                    -Filter "*.dll" `
+                    -ErrorAction SilentlyContinue |
+                    ForEach-Object {
+
+                      Copy-Item `
+                        -LiteralPath $_.FullName `
+                        -Destination "dist\bin\" `
+                        -Force
+                    }
+
+
+                  # --------------------------------------------------------
+                  # Copy plugin DLLs
+                  # --------------------------------------------------------
                   $searchRoots = @("build")
+
                   foreach ($root in $searchRoots) {
+
                     if (Test-Path $root) {
-                      Get-ChildItem -Path $root -Recurse -File -Filter *Plugin*.dll -ErrorAction SilentlyContinue |
+
+                      Get-ChildItem `
+                        -Path $root `
+                        -Recurse `
+                        -File `
+                        -Filter "*Plugin*.dll" `
+                        -ErrorAction SilentlyContinue |
                         ForEach-Object {
-                          Copy-Item -LiteralPath $_.FullName -Destination "dist\plugins\" -Force
+
+                          Copy-Item `
+                            -LiteralPath $_.FullName `
+                            -Destination "dist\plugins\" `
+                            -Force
                         }
                     }
                   }
 
-                  # MSVC CRT (VC143) -> dist\bin  (CRUCIAL for ServerCore)
-                  $crtDir = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\2022\*\VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT" `
-                    -Directory -ErrorAction SilentlyContinue |
+
+                  # --------------------------------------------------------
+                  # MSVC CRT
+                  # --------------------------------------------------------
+                  $crtDir = Get-ChildItem `
+                    "C:\Program Files\Microsoft Visual Studio\2022\*\VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT" `
+                    -Directory `
+                    -ErrorAction SilentlyContinue |
                     Sort-Object FullName -Descending |
                     Select-Object -First 1
 
                   if (-not $crtDir) {
-                    throw "MSVC CRT directory not found. Ensure VS 2022 Build Tools (C++ workload) is installed on the runner."
+                    throw `
+                      "MSVC CRT directory not found. Ensure VS 2022 Build Tools with C++ workload is installed."
                   }
 
-                  Copy-Item -Force "$($crtDir.FullName)\*.dll" "dist\bin\"
+                  Copy-Item `
+                    -Force `
+                    "$($crtDir.FullName)\*.dll" `
+                    "dist\bin\"
 
-                  # show what we packaged
-                  "=== dist\bin ==="
-                  Get-ChildItem dist\bin | Select-Object Name,Length
-                  "=== dist\plugins ==="
-                  Get-ChildItem dist\plugins | Select-Object Name,Length
 
-                  # Copy config example
+                  # --------------------------------------------------------
+                  # Display package contents
+                  # --------------------------------------------------------
+                  Write-Host "=== dist\bin ==="
+
+                  Get-ChildItem `
+                    dist\bin |
+                    Select-Object Name, Length
+
+                  Write-Host "=== dist\plugins ==="
+
+                  Get-ChildItem `
+                    dist\plugins |
+                    Select-Object Name, Length
+
+
+                  # --------------------------------------------------------
+                  # Copy configuration
+                  # --------------------------------------------------------
                   if (Test-Path "config.prod.json") {
-                    Copy-Item "config.prod.json" "dist\config\config.prod.json" -Force
-                  } elseif (Test-Path "config.json") {
-                    Copy-Item "config.json" "dist\config\config.prod.json" -Force
+
+                    Copy-Item `
+                      "config.prod.json" `
+                      "dist\config\config.prod.json" `
+                      -Force
+
+                  }
+                  elseif (Test-Path "config.json") {
+
+                    Copy-Item `
+                      "config.json" `
+                      "dist\config\config.prod.json" `
+                      -Force
                   }
 
+
+                  # --------------------------------------------------------
                   # Copy static content
+                  # --------------------------------------------------------
                   if (Test-Path "TestStaticContent\index.html") {
-                    Copy-Item "TestStaticContent\index.html" "dist\static\index.html" -Force
+
+                    Copy-Item `
+                      "TestStaticContent\index.html" `
+                      "dist\static\index.html" `
+                      -Force
                   }
 
 
-                  Write-Host "dist content:"
-                  Get-ChildItem dist -Recurse | Select-Object FullName, Length
+                  # --------------------------------------------------------
+                  # Final package
+                  # --------------------------------------------------------
+                  Write-Host "=== dist content ==="
 
-                  Compress-Archive -Path dist\* -DestinationPath "Falcata-win64.zip" -Force
+                  Get-ChildItem `
+                    dist `
+                    -Recurse |
+                    Select-Object FullName, Length
 
+                  Compress-Archive `
+                    -Path dist\* `
+                    -DestinationPath "Falcata-win64.zip" `
+                    -Force
+
+            # ==========================================================
+            # WINDOWS ARTIFACT
+            # ==========================================================
             - name: Upload artifact (Windows)
+              if: runner.os == 'Windows'
               uses: actions/upload-artifact@v4
               with:
                   name: falcata-win64
@@ -232,49 +622,94 @@ jobs:
                   if-no-files-found: error
                   retention-days: 7
 
-            - name: Clang-Format check (Ubuntu)
-              if: runner.os == 'Linux'
-              run: |
-                  clang-format --version
-                  clang-format --dry-run --Werror $(git ls-files '*.cpp' '*.hpp' '*.h' '*.c')
-
-            - name: Clang-Format check (Windows)
-              if: runner.os == 'Windows'
-              shell: pwsh
-              run: |
-                  clang-format --version
-                  $files = git ls-files | Where-Object { $_ -match '\\.(c|h|cpp|hpp)$' }
-                  if (-not $files) { Write-Host "No source files found."; exit 0 }
-                  clang-format --dry-run --Werror $files
-
-            - name: Clang-Tidy (Ubuntu, best-effort)
-              if: runner.os == 'Linux'
-              run: |
-                  clang-tidy --version
-                  # Use compile_commands.json produced by CMake
-                  clang-tidy $(git ls-files '*.cpp') -p build || true
-
-            - name: Clang-Tidy (Windows)
-              if: runner.os == 'Windows'
-              shell: pwsh
-              run: |
-                  clang-tidy --version
-                  $cpp = git ls-files | Where-Object { $_ -match '\\.(cpp|cc|cxx)$' }
-                  if (-not $cpp) { Write-Host "No C++ sources found."; exit 0 }
-                  clang-tidy $cpp -p build
-
+    # ==============================================================
+    # SONARQUBE
+    #
+    # Runs exactly once, after the complete build/test matrix.
+    #
+    # IMPORTANT:
+    # This runner must have network access to the private SonarQube
+    # server.
+    # ==============================================================
     sonar:
         name: SonarQube Analysis
-        needs: build-test
-        runs-on: [self-hosted, windows, x64]
+
+        needs:
+            - build-test
+
+        runs-on:
+            - self-hosted
+            - windows
+            - x64
 
         steps:
+            # ----------------------------------------------------------
+            # Checkout
+            # ----------------------------------------------------------
             - name: Checkout
               uses: actions/checkout@v4
               with:
                   fetch-depth: 0
                   submodules: recursive
 
+            # ----------------------------------------------------------
+            # Ninja
+            # ----------------------------------------------------------
+            - name: Setup Ninja
+              uses: seanmiddleditch/gha-setup-ninja@v5
+
+            # ----------------------------------------------------------
+            # Verify MSVC
+            # ----------------------------------------------------------
+            - name: Setup MSVC
+              uses: ilammy/msvc-dev-cmd@v1
+
+            # ----------------------------------------------------------
+            # Verify vcpkg
+            #
+            # This runner is a different machine from the GitHub-hosted
+            # Windows runner used by build-test.
+            # ----------------------------------------------------------
+            - name: Verify vcpkg
+              shell: pwsh
+              run: |
+                  $ErrorActionPreference = "Stop"
+
+                  $vcpkgRoot = "C:\vcpkg"
+                  $vcpkgExe = "$vcpkgRoot\vcpkg.exe"
+
+                  if (-not (Test-Path $vcpkgExe)) {
+                    throw "vcpkg not found: $vcpkgExe"
+                  }
+
+                  & $vcpkgExe version
+
+            # ----------------------------------------------------------
+            # Verify required dependencies
+            # ----------------------------------------------------------
+            - name: Verify Sonar build environment
+              shell: pwsh
+              run: |
+                  $ErrorActionPreference = "Stop"
+
+                  Write-Host "=== CMake ==="
+                  cmake --version
+
+                  Write-Host "=== Ninja ==="
+                  ninja --version
+
+                  Write-Host "=== Git ==="
+                  git --version
+
+                  Write-Host "=== MSVC ==="
+                  where.exe cl
+
+                  Write-Host "=== vcpkg ==="
+                  C:\vcpkg\vcpkg.exe version
+
+            # ----------------------------------------------------------
+            # Test connectivity to PRIVATE SonarQube
+            # ----------------------------------------------------------
             - name: Test SonarQube connectivity
               shell: pwsh
               env:
@@ -282,10 +717,17 @@ jobs:
               run: |
                   $ErrorActionPreference = "Stop"
 
+                  if ([string]::IsNullOrWhiteSpace($env:SONAR_HOST_URL)) {
+                    throw "SONAR_HOST_URL secret is empty."
+                  }
+
                   Write-Host "Testing SonarQube:"
                   Write-Host "$env:SONAR_HOST_URL"
 
-                  $url = "$env:SONAR_HOST_URL/api/system/status"
+                  $url = "$($env:SONAR_HOST_URL.TrimEnd('/'))/api/system/status"
+
+                  Write-Host "Endpoint:"
+                  Write-Host "$url"
 
                   $response = Invoke-WebRequest `
                     -Uri $url `
@@ -293,15 +735,24 @@ jobs:
                     -TimeoutSec 30
 
                   Write-Host "HTTP Status: $($response.StatusCode)"
+                  Write-Host "Response:"
                   Write-Host $response.Content
 
-            - name: Setup MSVC
-              uses: ilammy/msvc-dev-cmd@v1
-
+            # ----------------------------------------------------------
+            # Configure CMake
+            #
+            # compile_commands.json is required for C/C++ analysis.
+            # ----------------------------------------------------------
             - name: Configure CMake
               shell: pwsh
               run: |
+                  $ErrorActionPreference = "Stop"
+
                   $tc = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
+
+                  if (-not (Test-Path $tc)) {
+                    throw "vcpkg CMake toolchain not found: $tc"
+                  }
 
                   cmake `
                     -S . `
@@ -312,182 +763,46 @@ jobs:
                     -DVCPKG_TARGET_TRIPLET=x64-windows `
                     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
-            - name: Build
-              run: cmake --build build --parallel
+            # ----------------------------------------------------------
+            # Verify compilation database
+            # ----------------------------------------------------------
+            - name: Verify compile_commands.json
+              shell: pwsh
+              run: |
+                  $ErrorActionPreference = "Stop"
 
+                  $compileCommands = "build\compile_commands.json"
+
+                  if (-not (Test-Path $compileCommands)) {
+                    throw "compile_commands.json was not generated: $compileCommands"
+                  }
+
+                  $file = Get-Item $compileCommands
+
+                  Write-Host "compile_commands.json:"
+                  Write-Host "Path: $($file.FullName)"
+                  Write-Host "Size: $($file.Length) bytes"
+
+            # ----------------------------------------------------------
+            # Build
+            # ----------------------------------------------------------
+            - name: Build
+              run: |
+                  cmake --build build --parallel
+
+            # ----------------------------------------------------------
+            # Test
+            # ----------------------------------------------------------
             - name: Test
               working-directory: build
-              run: ctest --output-on-failure
+              run: |
+                  ctest --output-on-failure
 
+            # ----------------------------------------------------------
+            # SonarQube
+            # ----------------------------------------------------------
             - name: SonarQube
               uses: SonarSource/sonarqube-scan-action@master
               env:
                   SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
                   SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
-    # sanitizers:
-    #     name: Sanitizers (ASan/UBSan)
-    #     runs-on: ubuntu-22.04
-    #     steps:
-    #         - name: Checkout (with submodules)
-    #           uses: actions/checkout@v4
-    #           with:
-    #               submodules: recursive
-
-    #         - name: Install deps
-    #           run: |
-    #               sudo apt update
-    #               sudo apt install -y build-essential cmake ninja-build clang clang-tidy clang-format ccache libsodium-dev libpq-dev
-
-    #         - name: Configure
-    #           env:
-    #               CC: clang
-    #               CXX: clang++
-    #           run: |
-    #               cmake -S . -B build-asan -G Ninja \
-    #                 -DCMAKE_BUILD_TYPE=Debug \
-    #                 -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' \
-    #                 -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' \
-    #                 -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined'
-
-    #         - name: Build
-    #           run: cmake --build build-asan --parallel
-
-    #         - name: Test
-    #           run: |
-    #               cd build-asan
-    #               ctest --output-on-failure
-
-    # sanitizers-windows:
-    #     name: Sanitizers (Windows ASan)
-    #     runs-on: windows-2022
-    #     steps:
-    #         - name: Checkout (with submodules)
-    #           uses: actions/checkout@v4
-    #           with:
-    #               submodules: recursive
-
-    #         - name: Setup Ninja
-    #           uses: seanmiddleditch/gha-setup-ninja@v5
-
-    #         - name: Setup MSVC Developer Command Prompt
-    #           uses: ilammy/msvc-dev-cmd@v1
-
-    #         - name: Install LLVM (Windows)
-    #           shell: pwsh
-    #           run: |
-    #               choco install llvm --version=20.1.8 -y --no-progress
-    #               $llvmBin = "C:\\Program Files\\LLVM\\bin"
-    #               echo $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-    #         - name: Cache vcpkg (Windows)
-    #           uses: actions/cache@v4
-    #           with:
-    #               path: |
-    #                   C:\vcpkg
-    #               key: vcpkg-${{ runner.os }}-${{ hashFiles('.gitmodules') }}
-    #               restore-keys: |
-    #                   vcpkg-${{ runner.os }}-
-
-    #         - name: Install deps with vcpkg (Windows)
-    #           shell: pwsh
-    #           run: |
-    #               $vcpkgRoot = "C:\vcpkg"
-    #               if (-not (Test-Path "$vcpkgRoot\.git")) {
-    #                 git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
-    #               }
-    #               Push-Location $vcpkgRoot
-    #               git pull
-    #               .\bootstrap-vcpkg.bat
-    #               .\vcpkg.exe install libsodium:x64-windows libpq:x64-windows
-    #               Pop-Location
-
-    #               # sanity check: sodium.h must exist
-    #               if (-not (Test-Path "C:\vcpkg\installed\x64-windows\include\sodium.h")) {
-    #                 throw "sodium.h not found in vcpkg installed tree"
-    #               }
-
-    #         - name: Configure (clang-cl + ASan)
-    #           shell: pwsh
-    #           run: |
-    #               $tc = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
-
-    #               # Locate ASan runtime libs installed with LLVM
-    #               $clangRoot = "C:\Program Files\LLVM\lib\clang"
-    #               if (-not (Test-Path $clangRoot)) { throw "clang root not found: $clangRoot" }
-
-    #               $clangVer = (Get-ChildItem $clangRoot -Directory | Sort-Object Name -Descending | Select-Object -First 1).Name
-    #               $asanLibDir = Join-Path $clangRoot "$clangVer\lib\windows"
-    #               if (-not (Test-Path $asanLibDir)) { throw "ASan lib dir not found: $asanLibDir" }
-
-    #               $asan1 = Join-Path $asanLibDir "clang_rt.asan_dynamic-x86_64.lib"
-    #               $asan2 = Join-Path $asanLibDir "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
-
-    #               if (-not (Test-Path $asan1)) { throw "Missing: $asan1" }
-
-    #               $linkExtras = "/LIBPATH:`"$asanLibDir`" clang_rt.asan_dynamic-x86_64.lib"
-    #               if (Test-Path $asan2) {
-    #                 $linkExtras += " clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
-    #                 Write-Host "Using thunk lib: $asan2"
-    #               } else {
-    #                 Write-Host "Thunk lib not found (OK on some LLVM packages)."
-    #               }
-
-    #               cmake -S . -B build-asan -G Ninja `
-    #                 -DCMAKE_BUILD_TYPE=RelWithDebInfo `
-    #                 -DCMAKE_C_COMPILER=clang-cl `
-    #                 -DCMAKE_CXX_COMPILER=clang-cl `
-    #                 -DCMAKE_TOOLCHAIN_FILE="$tc" `
-    #                 -DVCPKG_TARGET_TRIPLET=x64-windows `
-    #                 -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
-    #                 -DCMAKE_C_FLAGS="/fsanitize=address /Zi" `
-    #                 -DCMAKE_CXX_FLAGS="/fsanitize=address /Zi" `
-    #                 -DCMAKE_EXE_LINKER_FLAGS="/INCREMENTAL:NO $linkExtras" `
-    #                 -DCMAKE_SHARED_LINKER_FLAGS="/INCREMENTAL:NO $linkExtras"
-
-    #         - name: Build
-    #           run: cmake --build build-asan --parallel
-
-    #         - name: Prepare ASan runtime DLLs (copy next to test exes)
-    #           shell: pwsh
-    #           run: |
-    #               $llvmRoot = "C:\Program Files\LLVM"
-    #               if (-not (Test-Path $llvmRoot)) { throw "LLVM root not found: $llvmRoot" }
-
-    #               # Find ASan DLLs (package layout varies)
-    #               $asanDlls = Get-ChildItem $llvmRoot -Recurse -Filter "clang_rt.asan*_x86_64.dll" -ErrorAction SilentlyContinue
-    #               if (-not $asanDlls -or $asanDlls.Count -eq 0) {
-    #                 # fallback pattern some packages use
-    #                 $asanDlls = Get-ChildItem $llvmRoot -Recurse -Filter "clang_rt.asan*.dll" -ErrorAction SilentlyContinue
-    #               }
-
-    #               if (-not $asanDlls -or $asanDlls.Count -eq 0) {
-    #                 Write-Host "No ASan DLLs found under $llvmRoot"
-    #                 Get-ChildItem $llvmRoot -Recurse -Filter "*asan*" | Select-Object -First 200 FullName | ForEach-Object { Write-Host $_ }
-    #                 throw "ASan runtime DLLs not found."
-    #               }
-
-    #               Write-Host "Found ASan DLLs:"
-    #               $asanDlls | Select-Object FullName | ForEach-Object { Write-Host $_.FullName }
-
-    #               # Copy DLLs next to every .exe in build-asan (Windows loader searches exe dir first)
-    #               $exeDirs = Get-ChildItem "build-asan" -Recurse -Filter "*.exe" | ForEach-Object { $_.Directory.FullName } | Sort-Object -Unique
-    #               if (-not $exeDirs -or $exeDirs.Count -eq 0) { throw "No test executables found under build-asan" }
-
-    #               foreach ($d in $exeDirs) {
-    #                 foreach ($dll in $asanDlls) {
-    #                   Copy-Item $dll.FullName -Destination $d -Force
-    #                 }
-    #               }
-
-    #               Write-Host "Copied ASan DLLs to $($exeDirs.Count) executable directories."
-
-    #         - name: Test
-    #           shell: pwsh
-    #           run: |
-    #               # Ensure ASan runtime DLL can be found
-    #               $env:ASAN_OPTIONS = "detect_container_overflow=0:halt_on_error=1:abort_on_error=1:strict_string_checks=1"
-    #               $llvmBin = "C:\\Program Files\\LLVM\\bin"
-    #               $env:PATH = "$llvmBin;$env:PATH"
-    #               cd build-asan
-    #               ctest --output-on-failure
