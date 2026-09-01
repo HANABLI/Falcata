@@ -634,8 +634,8 @@ jobs:
     sonar:
         name: SonarQube Analysis
 
-        needs:
-            - build-test
+        # needs:
+        #     - build-test
 
         runs-on:
             - self-hosted
