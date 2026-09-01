@@ -705,8 +705,6 @@ jobs:
               run: |
                   $ErrorActionPreference = "Stop"
 
-                  choco install llvm -y --no-progress
-
                   $llvmBin = "C:\Program Files\LLVM\bin"
 
                   if (-not (Test-Path $llvmBin)) {
